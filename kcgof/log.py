@@ -13,6 +13,7 @@ def get_logger():
 def l():
     return get_logger()
 
+
 #logging.basicConfig(level=logging.INFO)
 logging.basicConfig(format='%(levelname)s: %(asctime)s: %(module)s.%(funcName)s(): %(message)s',
                     level=logging.INFO)
