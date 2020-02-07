@@ -14,10 +14,28 @@ def get_root():
 def result_folder():
     """Return the full path to the result/ folder containing experimental result 
     files"""
+    return _get_key_from_default_config(['ex_results_path'])
+
+def _get_key_from_default_config(key):
+    """
+    Return the value in the default config dictionary as identified by the key.
+    """
     import kcgof.config as config
     con = config.get_default_config()
-    results_path = con['ex_results_path']
-    return results_path
+    value = con[key]
+    return value
+
+def get_torch_dtype():
+    """
+    Return the default torch dtype from the config.
+    """
+    return _get_key_from_default_config('torch_dtype')
+
+def get_torch_device():
+    """
+    Return the default torch device from the config.
+    """
+    return _get_key_from_default_config('torch_device')
 
 # def data_folder():
 #     """
@@ -40,9 +58,7 @@ def shared_resource_folder(*relative_path):
     """
     Return the full path to the shared resource folder.
     """
-    import kcgof.config as config
-    con = config.get_default_config()
-    path = con['shared_resource_path']
+    path = _get_key_from_default_config('shared_resource_path')
     if relative_path:
         path = os.path.join(path, *relative_path)
     return path

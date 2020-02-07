@@ -8,6 +8,9 @@ from abc import ABCMeta, abstractmethod
 import scipy.stats as stats
 import kcgof
 import kcgof.log as log
+import kcgof.glo as glo
+import torch
+import torch.distributions as dists
 #import warnings
 
 def warn_bounded_domain(self):
@@ -41,12 +44,17 @@ class UnnormalizedCondDensity(ABCMeta, object):
     p(y|x) where the normalizer may not be known. That is, in fact, it
     specifies p(y,x) since p(y|x) = p(y,x)/p(x), and p(x) is the normalizer.
     The normalizer of the joint density is not assumed to be known.
+
+    The KSSD and FSCD Stein-based tests only require grad_log(..). Subclasses
+    can implement either log_den(..) or grad_log(..). If log_den(..) is
+    implemented, grad_log(...) will be implemented automatically with
+    torch.autograd functions. 
     """
 
     @abstractmethod
     def log_den(self, X, Y):
         """
-        Evaluate log of the unnormalized density on the n points in (Y, X)
+        Evaluate log of the unnormalized density on the n points in (X, Y)
         i.e., log p(y_i, x_i) (up to the normalizer) for i = 1,..., n.
         Y, X are paired.
 
@@ -54,8 +62,14 @@ class UnnormalizedCondDensity(ABCMeta, object):
         Y: n x dy Torch tensor
 
         Return a one-dimensional Torch array of length n.
+        The returned array A should be such that A[i] depends on only X[i] and Y[i].
         """
-        raise NotImplementedError()
+        expect_dx = self.dx()
+        expect_dy = self.dy()
+        if X.shape[1] != expect_dx:
+            raise ValueError('X must have dimension dx={}. Found {}.'.format(expect_dx, X.shape[1]))
+        if Y.shape[1] != expect_dy:
+            raise ValueError('Y must have dimension dy={}. Found {}.'.format(expect_dy, Y.shape[1]))
 
     # def log_normalized_den(self, X):
     #     """
@@ -92,10 +106,21 @@ class UnnormalizedCondDensity(ABCMeta, object):
 
         Return an n x dy Torch array of gradients.
         """
-        # g = autograd.elementwise_grad(self.log_den)
-        # G = g(X)
-        # return G
-        raise NotImplementedError()
+        if X.shape[0] != Y.shape[0]:
+            raise ValueError('X and Y must have the same number of rows. Found: X.shape[0] = {} and Y.shape[0] = {}'.format(X.shape[0], Y.shape[0]))
+        
+        # Default implementation with torch.autograd
+        Y.requires_grad = True
+        logprob = self.log_den(X, Y)
+        # sum
+        slogprob = torch.sum(logprob)
+        Gs = torch.autograd.grad(slogprob, Y, retain_graph=True, only_inputs=True)
+        G = Gs[0]
+
+        n, dy = Y.shape
+        assert G.shape[0] == n
+        assert G.shape[1] == dy
+        return G
 
     @abstractmethod
     def dy(self):
@@ -112,6 +137,65 @@ class UnnormalizedCondDensity(ABCMeta, object):
         raise NotImplementedError()
 
 # end UnnormalizedCondDensity
+
+class CDGaussianOLS(UnnormalizedCondDensity):
+    """
+    Implement p(y|x) = Normal(y - c - slope*x, variance) 
+    which is the ordinary least-squares model with Gaussian noise N(0, variance).
+    * Y is real valued.
+    * X is dx dimensional. 
+    """
+    def __init__(self, slope, c, variance):
+        """
+        slope: the slope vector used in slope*x+c as the linear model. 
+            One dimensional Torch tensor. Length of the slope vector
+            determines the matching dimension of x.
+        c: a bias (real value)
+        variance: the variance of the noise
+        """
+        self.slope = slope.reshape(-1)
+        self.c = c
+        if variance <= 0:
+            raise ValueError('variance must be positive. Was {}'.format(variance))
+        self.variance = variance
+
+    def log_den(self, X, Y):
+        """
+        log p(y_i, x_i) (the normalizer is optional) for i = 1,..., n.
+        Y, X are paired.
+
+        X: n x dx Torch tensor
+        Y: n x dy Torch tensor
+
+        Return a one-dimensional Torch array of length n.
+        """
+        super().log_den(X, Y)
+        dx = self.dx()
+        # https://pytorch.org/docs/stable/distributions.html#normal
+        gauss = dists.Normal(0, self.variance)
+        S = self.slope.reshape(dx, 1)
+        Diff = Y - self.c - X.matmul(S)
+        return gauss.log_prob(Diff)
+
+    def get_condsource(self):
+        """
+        Return a CondSource that allows sampling from this density.
+        """
+        return None
+
+    @abstractmethod
+    def dy(self):
+        """
+        Return the dimension of Y.
+        """
+        return 1
+
+    @abstractmethod
+    def dx(self):
+        """
+        Return the dimension of X.
+        """
+        return self.slope.shape[0]
 
 
 # class UDFromCallable(UnnormalizedDensity):

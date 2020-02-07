@@ -5,6 +5,9 @@ __author__ = 'wittawat'
 
 from abc import ABCMeta, abstractmethod
 #import scipy.stats as stats
+import kcgof
+import kcgof.util as util
+import torch
 
 class CondData(object):
     """
@@ -104,6 +107,9 @@ class CondSource(object):
         """
         raise NotImplementedError()
 
+    def __call__(self, X, seed):
+        return self.cond_pair_sample(X, seed)
+
     @abstractmethod
     def dx(self):
         """Return the dimension of X"""
@@ -116,3 +122,37 @@ class CondSource(object):
 
 # end class CondSource
 
+
+class CSGaussianOLS(CondSource):
+    """
+    A CondSource for sampling cdensity.CDGaussianOLS.
+
+    p(y|x) = Normal(y - c - slope*x, variance) 
+    """
+    def __init__(self, slope, c, variance):
+        """
+        slope: the slope vector used in slope*x+c as the linear model. 
+            One dimensional Torch tensor. Length of the slope vector
+            determines the matching dimension of x.
+        c: a bias (real value)
+        variance: the variance of the noise
+        """
+        self.slope = slope.reshape(-1)
+        self.c = c
+        if variance <= 0:
+            raise ValueError('variance must be positive. Was {}'.format(variance))
+        self.variance = variance
+    
+    def cond_pair_sample(self, X, seed):
+        n = X.shape[0]
+        std = self.variance**0.5
+        Mean = X.matmul(self.slope.reshape(self.dx(), 1)) + self.c
+        with util.TorchSeedContext(seed=seed):
+            sam = torch.randn(n,1)*std + Mean
+        return sam
+
+    def dx(self):
+        return self.slope.shape[0]
+    
+    def dy(self):
+        return 1

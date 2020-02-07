@@ -6,26 +6,33 @@ Casual usage of the package should not need to change this.
 
 import kcgof.glo as glo
 import os
+import torch
 
 _default_config = {
-        # Full path to the directory to store temporary files when running
-        # experiments.     
-        'ex_scratch_path': '/is/ei/wittawat/tmp/kmod',
+    #  default torch data type
+    'torch_dtype': torch.double,
 
-        # Slurm partitions.
-        # When using SlurmComputationEngine for running the experiments, the partitions (groups of computing nodes)
-        # can be specified here. Set to None to not set to any value (i.e., use the default partition).
-        # The value is a string. For more than one partition, set to, for instance, "wrkstn,compute".
-        'ex_slurm_partitions': None,
+    # default torch device
+    'torch_device': torch.device('cpu'),
 
-        # Full path to the directory to store experimental results.
-        'ex_results_path': '/is/ei/wittawat/results/kcgof',
+    # Full path to the directory to store temporary files when running
+    # experiments.     
+    'ex_scratch_path': '/is/ei/wittawat/tmp/kmod',
 
-        # Full path to the root directory of the shared folder. This folder contains
-        # all resource files (e.g., data, trained models) that are released by the
-        # authors. 
-        'shared_resource_path': '/is/ei/wittawat/Gdrive/kcgof_share/',
-    }
+    # Slurm partitions.
+    # When using SlurmComputationEngine for running the experiments, the partitions (groups of computing nodes)
+    # can be specified here. Set to None to not set to any value (i.e., use the default partition).
+    # The value is a string. For more than one partition, set to, for instance, "wrkstn,compute".
+    'ex_slurm_partitions': None,
+
+    # Full path to the directory to store experimental results.
+    'ex_results_path': '/is/ei/wittawat/results/kcgof',
+
+    # Full path to the root directory of the shared folder. This folder contains
+    # all resource files (e.g., data, trained models) that are released by the
+    # authors. 
+    'shared_resource_path': '/is/ei/wittawat/Gdrive/kcgof_share/',
+}
 
 def set_default_config(config):
     global _default_config
