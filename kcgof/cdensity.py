@@ -9,6 +9,7 @@ import scipy.stats as stats
 import kcgof
 import kcgof.log as log
 import kcgof.glo as glo
+import kcgof.cdata as cdat
 import torch
 import torch.distributions as dists
 #import warnings
@@ -35,7 +36,7 @@ def warn_bounded_domain(self):
 #     return UDFromCallable(d, fgrad_log=g)
 
 
-class UnnormalizedCondDensity(ABCMeta, object):
+class UnnormalizedCondDensity( object):
     """
     An abstract class of an unnormalized conditional probability density
     function. This is intended to be used to represent a condiitonal model of
@@ -181,7 +182,8 @@ class CDGaussianOLS(UnnormalizedCondDensity):
         """
         Return a CondSource that allows sampling from this density.
         """
-        return None
+        cs = cdat.CSGaussianOLS(self.slope, self.c, self.variance)
+        return cs
 
     @abstractmethod
     def dy(self):

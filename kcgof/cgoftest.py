@@ -9,8 +9,9 @@ from abc import ABCMeta, abstractmethod
 import kcgof
 import kcgof.util as util
 import torch
+import torch.distributions as dists
 
-class CGofTest(ABCMeta, object):
+class CGofTest(object):
     """
     An abstract class for a goodness-of-fit test for conditional density
     models p(y|x). The test requires a paired dataset specified by giving X,
@@ -68,93 +69,94 @@ class KSSDTest(CGofTest):
     p is specified to the constructor in the form of an UnnormalizedCondDensity.
     """
 
-    def __init__(self, p, k, alpha=0.01, n_bootstrap=500, seed=11):
+    def __init__(self, p, k, l, alpha=0.01, n_bootstrap=500, seed=11):
         """
         p: an instance of UnnormalizedDensity
-        k: a KSTKernel object
-        bootstrapper: a function: (n) |-> numpy array of n weights 
-            to be multiplied in the double sum of the test statistic for generating 
-            bootstrap samples from the null distribution.
+        k: a kernel.Kernel object representing a kernel on X
+        l: a kernel.KCSTKernel object representing a kernel on Y
         alpha: significance level 
         n_bootstrap: The number of times to simulate from the null distribution
             by bootstrapping. Must be a positive integer.
         """
         super(KSSDTest, self).__init__(p, alpha)
         self.k = k
+        self.l = l
         self.n_bootstrap = n_bootstrap
         self.seed = seed
 
-    def perform_test(self, dat, return_simulated_stats=False, return_ustat_gram=False):
+    def perform_test(self, X, Y, return_simulated_stats=False, return_ustat_gram=False):
         """
-        dat: a instance of Data
+        X,Y: torch tensors. 
+        return_simulated_stats: If True, also include the boostrapped
+            statistics in the returned dictionary.
         """
-        raise NotImplementedError()
         with util.ContextTimer() as t:
             alpha = self.alpha
-            n_simulate = self.n_simulate
-            X = dat.data()
+            n_bootstrap = self.n_bootstrap
             n = X.shape[0]
 
-            _, H = self.compute_stat(dat, return_ustat_gram=True)
-            test_stat = n*np.mean(H)
-            # bootrapping
-            sim_stats = np.zeros(n_simulate)
-            with util.NumpySeedContext(seed=self.seed):
-                for i in range(n_simulate):
-                   W = self.bootstrapper(n)
-                   # n * [ (1/n^2) * \sum_i \sum_j h(x_i, x_j) w_i w_j ]
-                   boot_stat = W.dot(H.dot(old_div(W,float(n))))
-                   # This is a bootstrap version of n*V_n
-                   sim_stats[i] = boot_stat
+            test_stat, H = self.compute_stat(X, Y, return_ustat_gram=True)
+            # bootstrapping
+            sim_stats = torch.zeros(n_bootstrap)
+            mult_dist = dists.multinomial.Multinomial(total_count=n, probs=torch.ones(n)/n)
+            with torch.no_grad():
+                with util.TorchSeedContext(seed=self.seed):
+                    for i in range(n_bootstrap):
+                        W = mult_dist.sample()
+                        Wt = (W-1.0)/n
+                        # Bootstrapped statistic
+                        boot_stat =  n * ( H.matmul(Wt).dot(Wt) - torch.diag(H).dot(Wt**2) )
+                        sim_stats[i] = boot_stat
  
             # approximate p-value with the permutations 
-            pvalue = np.mean(sim_stats > test_stat)
+            I = sim_stats > test_stat
+            pvalue = torch.mean(I.type(torch.float)).item()
  
-        results = {'alpha': self.alpha, 'pvalue': pvalue, 'test_stat': test_stat,
-                 'h0_rejected': pvalue < alpha, 'n_simulate': n_simulate,
+        results = {'alpha': self.alpha, 'pvalue': pvalue, 
+            'test_stat': test_stat.item(),
+                 'h0_rejected': pvalue < alpha, 'n_simulate': n_bootstrap,
                  'time_secs': t.secs, 
                  }
         if return_simulated_stats:
-            results['sim_stats'] = sim_stats
+            results['sim_stats'] = sim_stats.detach().numpy()
         if return_ustat_gram:
             results['H'] = H
             
         return results
 
 
-    def compute_stat(self, dat, return_ustat_gram=False):
+    def compute_stat(self, X, Y, return_ustat_gram=False):
         """
-        Compute n times the U-statistic estimator of KSSD.
+        Compute n x the U-statistic estimator of KSSD.
 
         return_ustat_gram: If true, then return the n x n matrix used to
             compute the statistic 
         """
-        X = dat.data()
-        n, d = X.shape
+        n, dy = Y.shape
         k = self.k
-        # n x d matrix of gradients
-        grad_logp = self.p.grad_log(X)
+        l = self.l
+        # n x dy matrix of gradients
+        grad_logp = self.p.grad_log(X, Y)
         # n x n
-        gram_glogp = grad_logp.dot(grad_logp.T)
+        gram_glogp = grad_logp.matmul(grad_logp.T)
         # n x n
-        K = k.eval(X, X)
+        L = l.eval(Y, Y)
 
-        B = np.zeros((n, n))
-        C = np.zeros((n, n))
-        for i in range(d):
+        B = torch.zeros((n, n))
+        C = torch.zeros((n, n))
+        for i in range(dy):
             grad_logp_i = grad_logp[:, i]
-            B += k.gradX_Y(X, X, i)*grad_logp_i
-            C += (k.gradY_X(X, X, i).T * grad_logp_i).T
+            B += l.gradX_Y(Y, Y, i)*grad_logp_i
+            C += (l.gradY_X(Y, Y, i).T * grad_logp_i).T
 
-        H = K*gram_glogp + B + C + k.gradXY_sum(X, X)
-        # V-statistic
-        stat = n*np.mean(H)
+        h = L*gram_glogp + B + C + l.gradXY_sum(Y, Y)
+        # smoothing 
+        K = k.eval(X, X)
+        H = K*h
+        # U-statistic
+        ustat = (torch.sum(H) - torch.sum(torch.diag(H)) )/(n*(n-1))
+        stat = n*ustat
         if return_ustat_gram:
             return stat, H
         else:
             return stat
-
-        #print 't1: {0}'.format(t1)
-        #print 't2: {0}'.format(t2)
-        #print 't3: {0}'.format(t3)
-        #print 't4: {0}'.format(t4)

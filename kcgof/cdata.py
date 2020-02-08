@@ -144,6 +144,8 @@ class CSGaussianOLS(CondSource):
         self.variance = variance
     
     def cond_pair_sample(self, X, seed):
+        if X.shape[1] != self.slope.shape[0]:
+            raise ValueError('The dimension of X must be the same as the dimension of slope. Slope dim: {}, X dim: {}'.format(self.slope.shape[0], X.shape[1]))
         n = X.shape[0]
         std = self.variance**0.5
         Mean = X.matmul(self.slope.reshape(self.dx(), 1)) + self.c

@@ -2,6 +2,10 @@
 
 Kernel tests for conditional goodness of fit and model comparison of conditioal density models.
 
+## Dependency 
+
+* Pytorch 1.4.0
+
 ## Development
 
 To install the package for development purpose, follow the following steps: 
@@ -9,6 +13,7 @@ To install the package for development purpose, follow the following steps:
 1. Make a new Anaconda environment for this project. We will need Pytorch.
     Switch to this environment.
 2. Install `kgof` (dependency). See https://github.com/wittawatj/kgof. 
+
 2. Clone this repository to your local folder.  
 3. Issue the following command in a terminal to install the `kcgof` package
     from this repository.

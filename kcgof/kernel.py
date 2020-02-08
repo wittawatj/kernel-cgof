@@ -4,11 +4,12 @@ A module containing kernel functions.
 
 from abc import ABCMeta, abstractmethod
 import torch
+import kgof
+import kgof.kernel as gofker
 
-class Kernel(ABCMeta, object):
+class Kernel(object):
     """Abstract class for kernels. Inputs to all methods are numpy arrays."""
 
-    @abstractmethod
     def eval(self, X, Y):
         """
         Evaluate the kernel on data X and Y
@@ -16,9 +17,8 @@ class Kernel(ABCMeta, object):
         Y: ny x d
         return nx x ny Gram matrix
         """
-        pass
+        raise NotImplementedError()
 
-    @abstractmethod
     def pair_eval(self, X, Y):
         """Evaluate k(x1, y1), k(x2, y2), ...
 
@@ -26,10 +26,18 @@ class Kernel(ABCMeta, object):
         Y: n x d
         return a 1d numpy array of length n.
         """
-        pass
+        raise NotImplementedError()
 
+class KCSTKernel(gofker.KSTKernel, Kernel):
+    """
+    Interface for specifying a Kernel for a Conditional Stein Test (KCST).
+    This is infact equivalent to the interface for the unconditional kernel
+    Stein test as defined in kgof.kernel.KSTKernel.
+    """
+    __metaclass__ = ABCMeta
+    pass
 
-class PTKGauss(Kernel):
+class PTKGauss(KCSTKernel):
     """
     Pytorch implementation of the isotropic Gaussian kernel.
     Parameterization is the same as in the density of the standard normal
@@ -38,9 +46,9 @@ class PTKGauss(Kernel):
 
     def __init__(self, sigma2):
         """
-        sigma2: a number representing squared width
+        sigma2: a number representing the squared bandwidth
         """
-        assert (sigma2 > 0).any(), 'sigma2 must be > 0. Was %s'%str(sigma2)
+        assert sigma2 > 0, 'sigma2 must be > 0. Was %s'%str(sigma2)
         self.sigma2 = sigma2
 
     def eval(self, X, Y):
@@ -56,11 +64,11 @@ class PTKGauss(Kernel):
         ------
         K : a n1 x n2 Gram matrix.
         """
-        sigma2 = torch.sqrt(self.sigma2**2)
+        sigma2 = self.sigma2
         sumx2 = torch.sum(X**2, dim=1).view(-1, 1)
         sumy2 = torch.sum(Y**2, dim=1).view(1, -1)
         D2 = sumx2 - 2*torch.matmul(X, Y.transpose(1, 0)) + sumy2
-        K = torch.exp(-D2.div(2.0*sigma2))
+        K = torch.exp(-D2/(2.0*sigma2))
         return K
 
     def pair_eval(self, X, Y):
@@ -81,10 +89,57 @@ class PTKGauss(Kernel):
         assert d1==d2, 'Two inputs must have the same dimension'
         D2 = torch.sum( (X-Y)**2, 1)
         sigma2 = torch.sqrt(self.sigma2**2)
-        Kvec = torch.exp(old_div(-D2, (2.0*sigma2)))
+        Kvec = torch.exp(-D2/(2.0*sigma2))
         return Kvec
 
     def __str__(self):
         return "PTKGauss(%.3f)" % self.sigma2
+
+    def gradX_Y(self, X, Y, dim):
+        """
+        Compute the gradient with respect to the dimension dim of X in k(X, Y).
+
+        X: nx x d
+        Y: ny x d
+
+        Return a numpy array of size nx x ny.
+        """
+        sigma2 = self.sigma2
+        K = self.eval(X, Y)
+        Diff = X[:, [dim]] - Y[:, [dim]].T
+        #Diff = np.reshape(X[:, dim], (-1, 1)) - np.reshape(Y[:, dim], (1, -1))
+        G = -K*Diff/sigma2
+        return G
+
+    def gradY_X(self, X, Y, dim):
+        """
+        Compute the gradient with respect to the dimension dim of Y in k(X, Y).
+
+        X: nx x d
+        Y: ny x d
+
+        Return a numpy array of size nx x ny.
+        """
+        return -self.gradX_Y(X, Y, dim)
+
+    def gradXY_sum(self, X, Y):
+        r"""
+        Compute \sum_{i=1}^d \frac{\partial^2 k(X, Y)}{\partial x_i \partial y_i}
+        evaluated at each x_i in X, and y_i in Y.
+
+        X: nx x d numpy array.
+        Y: ny x d numpy array.
+
+        Return a nx x ny numpy array of the derivatives.
+        """
+        (n1, d1) = X.shape
+        (n2, d2) = Y.shape
+        assert d1==d2, 'Dimensions of the two inputs must be the same'
+        d = d1
+        sigma2 = self.sigma2
+        D2 = torch.sum(X**2, 1).view(n1, 1) - 2*torch.matmul(X, Y.T) + torch.sum(Y**2, 1).view(1, n2)
+        K = torch.exp(-D2/(2.0*sigma2))
+        G = K/sigma2 *(d - D2/sigma2)
+        return G
 
 # end PTKGauss
