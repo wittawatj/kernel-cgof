@@ -10,6 +10,7 @@ import kcgof
 import kcgof.util as util
 import torch
 import torch.distributions as dists
+import typing
 
 class CGofTest(object):
     """
@@ -29,7 +30,7 @@ class CGofTest(object):
         self.alpha = alpha
 
     @abstractmethod
-    def perform_test(self, X, Y):
+    def perform_test(self, X, Y) -> typing.Dict:
         """
         X: Torch tensor of size n x dx
         Y: Torch tensor of size n x dy
