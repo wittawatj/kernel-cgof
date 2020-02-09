@@ -56,6 +56,36 @@ class CGofTest(object):
         """
         raise NotImplementedError()
 
+class KSSDWitness(object):
+    """
+    Construct a callable witness function associated with the KSSD test.
+    The witness function is real-valued and is defined as 
+    v |-> || G(v) ||^2
+    where G is the RKHS-valued function such that its squared RKHS norm
+    defines the KSSD statistic. The witness is supposed to be a zero function
+    under H0. In practice, G has to be estimated from the data.
+    """
+    def __init__(self, p, k, l, X, Y):
+        """
+        p: an instance of UnnormalizedCondDensity
+        k: a kernel.Kernel object representing a kernel on X
+        l: a kernel.KCSTKernel object representing a kernel on Y
+        X, Y: torch tensors representing the data for X and Y
+        """
+        self.p = p
+        self.k = k
+        self.l = l
+
+    def __call__(self, V):
+        """
+        V: Torch tensor of size J x dx specifying J test locations to evaluate 
+            the witness function.
+
+        Return: one-dimensional torch array of length J representing the
+            values of the witness function evaluated at the J locations.
+        """
+        pass
+
 
 class KSSDTest(CGofTest):
     """
@@ -67,12 +97,13 @@ class KSSDTest(CGofTest):
     H0: the joint sample follows p(y|x)
     H1: the joint sample does not follow p(y|x)
 
-    p is specified to the constructor in the form of an UnnormalizedCondDensity.
+    p is specified to the constructor in the form of an
+    UnnormalizedCondDensity.
     """
 
     def __init__(self, p, k, l, alpha=0.01, n_bootstrap=500, seed=11):
         """
-        p: an instance of UnnormalizedDensity
+        p: an instance of UnnormalizedCondDensity
         k: a kernel.Kernel object representing a kernel on X
         l: a kernel.KCSTKernel object representing a kernel on Y
         alpha: significance level 
