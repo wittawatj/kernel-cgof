@@ -8,6 +8,7 @@ __author__ = 'wittawat'
 from abc import ABCMeta, abstractmethod
 import kcgof
 import kcgof.util as util
+import kcgof.kernel as ker
 import torch
 import torch.distributions as dists
 import typing
@@ -75,14 +76,17 @@ class KSSDWitness(object):
         self.p = p
         self.k = k
         self.l = l
+        self.X = X
+        self.Y = Y
 
-    def __call__(self, V):
+    def __call__(self, at):
         """
-        V: Torch tensor of size J x dx specifying J test locations to evaluate 
-            the witness function.
+        at: Torch tensor of size m x dx specifying m locations to evaluate 
+            the witness function. The witness function is evaluated at each
+            point separately.
 
-        Return: one-dimensional torch array of length J representing the
-            values of the witness function evaluated at the J locations.
+        Return: one-dimensional torch array of length m representing the
+            values of the witness function evaluated at these locations.
         """
         pass
 
@@ -192,3 +196,34 @@ class KSSDTest(CGofTest):
             return stat, H
         else:
             return stat
+
+class FSCDTest(KSSDTest):
+    """
+    Conditional goodness-of-fit test with the Finite Set Conditional
+    Discrepancy (FSCD).
+
+    Test statistic is n*U-statistic.
+
+    H0: the joint sample follows p(y|x)
+    H1: the joint sample does not follow p(y|x)
+
+    p is specified to the constructor in the form of an
+    UnnormalizedCondDensity.
+    """
+    def __init__(self, p, k, l, V, alpha=0.01, n_bootstrap=500, seed=12):
+        """
+        p: an instance of UnnormalizedCondDensity
+        k: a kernel.Kernel object representing a kernel on X
+        l: a kernel.KCSTKernel object representing a kernel on Y
+        V: torch array of size J x dx representing the J test locations in
+            the domain of X
+        alpha: significance level 
+        n_bootstrap: The number of times to simulate from the null distribution
+            by bootstrapping. Must be a positive integer.
+        """
+        # form a finite-dimensional kernel defined with the test locations
+        kbar = ker.PTKTestLocations(k, V)
+        super(FSCDTest, self).__init__(p, kbar, l, alpha=alpha,
+            n_bootstrap=n_bootstrap, seed=seed)
+        self.V = V
+

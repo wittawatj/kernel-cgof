@@ -8,7 +8,8 @@ import kgof
 import kgof.kernel as gofker
 
 class Kernel(object):
-    """Abstract class for kernels. Inputs to all methods are numpy arrays."""
+    """Abstract class for kernels. 
+    Inputs to all methods are torch arrays."""
 
     def eval(self, X, Y):
         """
@@ -24,7 +25,7 @@ class Kernel(object):
 
         X: n x d where each row represents one point
         Y: n x d
-        return a 1d numpy array of length n.
+        return a 1d torch array of length n.
         """
         raise NotImplementedError()
 
@@ -36,6 +37,45 @@ class KCSTKernel(gofker.KSTKernel, Kernel):
     """
     __metaclass__ = ABCMeta
     pass
+
+class PTKTestLocations(Kernel):
+    """
+    A kernel K defined as
+    
+    K(x, y) = \sum_{i=1}^J k(x, v_i) k(y, v_i)
+
+    for some Kernel k, and a set V = {v_1,..., v_J} containing the test
+    locations. This kernel is used in The Finite Set Conditional Discrepancy
+    (FSCD). {v_i}_i have to be in the domain that k can accept.
+    """
+    def __init__(self, k: Kernel, V: torch.tensor):
+        """
+        k: a base kernel of type Kernel
+        V: a torch tensor specifying J locations used to form the kernel
+        """
+        self.k = k
+        self.V = V
+
+    def eval(self, X, Y):
+        k = self.k
+        V = self.V
+        J = V.shape[0]
+        # n x J
+        phix = k.eval(X, V)
+        phiy = k.eval(Y, V)
+        K = phix.matmul(phiy.T)/J
+        return K
+
+    def pair_eval(self, X, Y):
+        k = self.k
+        V = self.V
+        J = V.shape[0]
+        # n x J
+        phix = k.eval(X, V)
+        phiy = k.eval(Y, V)
+        Kvec = torch.sum(phix*phiy, 1)/J
+        return Kvec
+
 
 class PTKGauss(KCSTKernel):
     """
