@@ -72,13 +72,13 @@ class UnnormalizedCondDensity( object):
         if Y.shape[1] != expect_dy:
             raise ValueError('Y must have dimension dy={}. Found {}.'.format(expect_dy, Y.shape[1]))
 
-    # def log_normalized_den(self, X):
-    #     """
-    #     Evaluate the exact normalized log density. The difference to log_den()
-    #     is that this method adds the normalizer. This method is not
-    #     compulsory. Subclasses do not need to override.
-    #     """
-    #     raise NotImplementedError()
+    def log_normalized_den(self, X, Y):
+        """
+        Evaluate the exact normalized log density. The difference to log_den()
+        is that this method adds the normalizer. This method is not
+        compulsory. Subclasses do not need to override.
+        """
+        raise NotImplementedError()
 
     def get_condsource(self):
         """
@@ -170,6 +170,10 @@ class CDGaussianOLS(UnnormalizedCondDensity):
 
         Return a one-dimensional Torch array of length n.
         """
+        super().log_den(X, Y)
+        return self.log_normalized_den(X, Y)
+
+    def log_normalized_den(self, X, Y):
         super().log_den(X, Y)
         dx = self.dx()
         # https://pytorch.org/docs/stable/distributions.html#normal
