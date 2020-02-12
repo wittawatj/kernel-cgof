@@ -238,9 +238,10 @@ class FSCDPowerCriterion(object):
             pc_values = torch.zeros(m)
             for i in range(m):
                 Vi = at[i]
-                pc_values=[i] = self._point_power_criterion(V=Vi)
+                # print(Vi)
+                # detaching saves a lot of memory
+                pc_values[i] = self._point_power_criterion(V=Vi).detach()
             return pc_values
-
         else:
             raise ValueError('at must be a 2d or a 3d tensor. Found at.shape = {}'.format(at.shape))
 
