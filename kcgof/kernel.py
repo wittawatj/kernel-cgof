@@ -38,6 +38,44 @@ class KCSTKernel(gofker.KSTKernel, Kernel):
     __metaclass__ = ABCMeta
     pass
 
+class HasTunableParams(object):
+    """
+    Interface specifying that the object has tunable parameters.
+    Can be used with a Kernel to have a tunable kernel.
+    """
+    # constrain_params_function = lambda: None
+    _tunable_params = []
+
+    def get_tunable_params(self):
+        """
+        Return list of parameters to optimize or dicts defining
+        parameter groups. Intended to be used with optimizers in `torch.optim`.
+        https://pytorch.org/docs/stable/optim.html
+        """
+        return self._tunable_params
+
+    def set_tunable_params(self, params):
+        """
+        Set the list of parameters to be returned from
+        get_tunable_params()
+        """
+        self._tunable_params = params
+
+    # def constrain_params(self):
+    #     """
+    #     Modify the parameters returned from get_tunable_parameters() in-place
+    #     so as to satisfy the constraint (if any).
+    #     For instance, if a = self.get_tunable_parameters() is a scalar
+    #     parameter that must be non-negative, then perhaps what this method
+    #     can do in this case is a.clamp_(min=0).
+    #     This method will be called after calling optimizer.step().
+    #     If there is no constraint, subclasses do not need to implement this.
+
+    #     Return nothing.
+    #     """
+    #     self.constrain_params_function()
+
+
 class PTKTestLocations(Kernel):
     """
     A kernel K defined as
@@ -55,6 +93,13 @@ class PTKTestLocations(Kernel):
         """
         self.k = k
         self.V = V
+
+        # if isinstance(k, HasTunableParams):
+        #     _tunable_params = k.get_tunable_params() + [V]
+        # else:
+        #     # no tunable parameters in k
+        #     _tunable_params = [V]
+        # self._tunable_params = _tunable_params
 
     def eval(self, X, Y):
         k = self.k
@@ -77,7 +122,9 @@ class PTKTestLocations(Kernel):
         return Kvec
 
 
-class PTKGauss(KCSTKernel):
+class PTKGauss(KCSTKernel, 
+# HasTunableParams
+):
     """
     Pytorch implementation of the isotropic Gaussian kernel.
     Parameterization is the same as in the density of the standard normal
@@ -89,7 +136,8 @@ class PTKGauss(KCSTKernel):
         sigma2: a number representing the squared bandwidth
         """
         assert sigma2 > 0, 'sigma2 must be > 0. Was %s'%str(sigma2)
-        self.sigma2 = sigma2
+        self.sigma2 = torch.tensor([1.0])*sigma2
+        # _tunable_params = self.sigma2
 
     def eval(self, X, Y):
         """
@@ -107,7 +155,7 @@ class PTKGauss(KCSTKernel):
         sigma2 = self.sigma2
         sumx2 = torch.sum(X**2, dim=1).view(-1, 1)
         sumy2 = torch.sum(Y**2, dim=1).view(1, -1)
-        D2 = sumx2 - 2*torch.matmul(X, Y.transpose(1, 0)) + sumy2
+        D2 = sumx2 - 2.0*torch.matmul(X, Y.transpose(1, 0)) + sumy2
         K = torch.exp(-D2/(2.0*sigma2))
         return K
 

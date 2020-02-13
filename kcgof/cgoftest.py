@@ -11,6 +11,7 @@ import kcgof.util as util
 import kcgof.kernel as ker
 import torch
 import torch.distributions as dists
+import torch.optim as optim
 import typing
 
 class CGofTest(object):
@@ -200,7 +201,7 @@ class FSCDPowerCriterion(object):
         self.X = X
         self.Y = Y
         self.kssdtest = KSSDTest(p, k, l)
-
+    
     def eval_witness(self, at):
         """
         Evaluate the biased estimate of the witness function of KSSD/FSCD.
@@ -245,9 +246,61 @@ class FSCDPowerCriterion(object):
         else:
             raise ValueError('at must be a 2d or a 3d tensor. Found at.shape = {}'.format(at.shape))
 
-    def _point_power_criterion(self, V):
+    def optimize_params(self, params, V, lr, constraint_f=None, reg=1e-4, max_iter=500):
         """
-        Evaluate the power criterion at the set of J locations in V.
+        Optimize parameters in the list params by maximizing the power
+        criterion of the FSCD test. This method modifies the state of this
+        object (specifically, parameters in k, l).
+
+        - params:  a list of torch.Tensor s or dict s.
+        Specifies what Tensors should be optimized. Will be fed to an
+        optimizer in torch.optim. All parameters in params must be part of
+        (p, k, l). 
+
+        - V: J x dx test locations
+
+        - constraint_f: callable object (params, V) |-> None that modifies
+        all the parameters to be optimized in-place to satisfy the
+        constraints (if any).
+
+        - reg: regularizer of the power criterion
+
+        - lr: overall learning rate. Lr of each parameter can be specified
+        separately as well. https://pytorch.org/docs/stable/optim.html
+
+        - max_iter: maximum number of gradient updates
+
+        Return a torch array of recorded function values
+        """
+        if params is None:
+            params = []
+        if constraint_f is None:
+            constraint_f = lambda *args, **kwargs: None
+        # optimizer
+        all_params = params + [V]
+        for pa in all_params:
+            pa.requires_grad = True
+        optimizer = optim.Adam(all_params, lr=lr)
+
+        # record
+        objs = torch.zeros(max_iter)
+        for t in range(max_iter):
+            optimizer.zero_grad()
+            # minimize the *negative* of power criterion
+            obj = -self._point_power_criterion(V, reg)
+            obj.backward()
+            optimizer.step()
+            # constraint satisfaction
+            constraint_f(params, V)
+            objs[t] = obj.detach()
+        return objs
+
+    def _point_power_criterion(self, V, reg=1e-5):
+        """
+        Evaluate the regularized power criterion at the set of J locations in
+        V. The objective is mean_under_H1 / (reg + standard deviation under H1)
+
+        reg: a non-negative scalar specifying the regularization parameter
         """
         kssdtest = self.kssdtest
         k = self.k
@@ -266,7 +319,7 @@ class FSCDPowerCriterion(object):
         # compute biased FSCD = average of the witness values at the J
         # locations
         fscd_biased = torch.mean(hKbar)
-        power_cri = fscd_biased/sigma_V
+        power_cri = fscd_biased/(sigma_V + reg)
         return power_cri
 
     # def _point_h1_std(self, V):
