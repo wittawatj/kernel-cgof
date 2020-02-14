@@ -22,8 +22,8 @@ class CondData(object):
 
     def __init__(self, X, Y):
         """
-        :param X: n x d Pytorch tensor for dataset X
-        :param Y: n x d' Pytorch tensor for dataset Y
+        :param X: n x dx Pytorch tensor for dataset X
+        :param Y: n x dy Pytorch tensor for dataset Y
         """
         self.X = X
         self.Y = Y
@@ -122,8 +122,51 @@ class CondSource(object):
 
 # end class CondSource
 
+class CSAdditiveNoiseRegression(CondSource):
+    """
+    CondSource for CDAdditiveNoiseRegression.
+    Implement p(y|x) = f(x) + noise.
+    The specified noise Z and its pdf g have to satisfy:
+    Z + z_0 ~ g(Z - z_0) for any constant z_0.
+    That is, g has to belong to the location family. Examples include the
+    normal, Uniform, Laplace, etc.
+    https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
+    """
+    def __init__(self, f, noise, dx):
+        """
+        :param f: the mean function. A torch callable module.
+            Return the same shape as input X.
+        :param noise: an object with the same interface as a distribution in
+            torch.distributions
+                https://pytorch.org/docs/stable/distributions.html
+            :param dx: dimension of x. A positive integer
+        """
+        self.f = f
+        self.noise = noise
+        self._dx = dx
+
+    def cond_pair_sample(self, X, seed):
+        if X.shape[1] != self._dx:
+            raise ValueError('Input dimension in X (found {}) does not match dx ({}) as specified by the model.'.format(X.shape[1], self._dx))
+        noise_dist = self.noise
+        n = X.shape[0]
+        # mean
+        f = self.f
+        fX = f(X)
+        with util.TorchSeedContext(seed=seed):
+            Y = noise_dist.sample((n, 1)) + fX
+        return Y
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return 1
+
+# end CSAdditiveNoiseRegression
 
 class CSGaussianOLS(CondSource):
+
     """
     A CondSource for sampling cdensity.CDGaussianOLS.
 

@@ -216,7 +216,7 @@ class FSCDPowerCriterion(object):
         # TODO: can be improved by vectorzing and avoiding the for loop. Later.
         return self._eval_witness_loop(at)
 
-    def eval_power_criterion(self, at):
+    def eval_power_criterion(self, at, reg=1e-5):
         """
         The power criterion is, by construction, a function of a set of test
         locations. So there are two modes of operation.
@@ -231,7 +231,7 @@ class FSCDPowerCriterion(object):
         """
         dim = len(at.shape)
         if dim == 2:
-            return self._point_power_criterion(V=at)
+            return self._point_power_criterion(V=at, reg=reg)
         elif dim == 3:
             # TODO: try to improve the computation of this part. Not trivial
             # though.
@@ -241,7 +241,7 @@ class FSCDPowerCriterion(object):
                 Vi = at[i]
                 # print(Vi)
                 # detaching saves a lot of memory
-                pc_values[i] = self._point_power_criterion(V=Vi).detach()
+                pc_values[i] = self._point_power_criterion(V=Vi, reg=reg).detach()
             return pc_values
         else:
             raise ValueError('at must be a 2d or a 3d tensor. Found at.shape = {}'.format(at.shape))

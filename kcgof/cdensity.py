@@ -139,6 +139,54 @@ class UnnormalizedCondDensity( object):
 
 # end UnnormalizedCondDensity
 
+class CDAdditiveNoiseRegression(UnnormalizedCondDensity):
+    """
+    Implement p(y|x) = f(x) + noise.
+    The specified noise Z and its pdf g have to satisfy:
+    Z + z_0 ~ g(Z - z_0) for any constant z_0.
+    That is, g has to belong to the location family. Examples include the
+    normal, Uniform, Laplace, etc.
+    https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
+    """
+    def __init__(self, f, noise, dx):
+        """
+        :param f: the mean function. A torch callable module.
+            Return the same shape as input X.
+        :param noise: an object with the same interface as a distribution in
+            torch.distributions
+            https://pytorch.org/docs/stable/distributions.html
+        :param dx: dimension of x. A positive integer
+        """
+        self.f = f
+        self.noise = noise
+        self._dx = dx
+
+    def log_den(self, X, Y):
+        super().log_den(X, Y)
+        return self.log_normalized_den(X, Y)
+
+    def log_normalized_den(self, X, Y):
+        # Y has to be n x 1
+        super().log_den(X, Y)
+        f = self.f
+        noise_dist = self.noise
+        # compute the mean f(x)
+        fX = f(X)
+        log_prob = noise_dist.log_prob(Y - fX)
+        assert log_prob.shape[0] == X.shape[0]
+        return log_prob
+
+    def get_condsource(self):
+        return cdat.CSAdditiveNoiseRegression(self.f, self.noise, self.dx())
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return 1
+
+# end CDAdditiveNoiseRegression
+
 class CDGaussianOLS(UnnormalizedCondDensity):
     """
     Implement p(y|x) = Normal(y - c - slope*x, variance) 
@@ -189,14 +237,12 @@ class CDGaussianOLS(UnnormalizedCondDensity):
         cs = cdat.CSGaussianOLS(self.slope, self.c, self.variance)
         return cs
 
-    @abstractmethod
     def dy(self):
         """
         Return the dimension of Y.
         """
         return 1
 
-    @abstractmethod
     def dx(self):
         """
         Return the dimension of X.
