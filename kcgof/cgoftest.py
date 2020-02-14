@@ -13,6 +13,8 @@ import torch
 import torch.distributions as dists
 import torch.optim as optim
 import typing
+from scipy.integrate import quad
+import numpy as np
 
 class CGofTest(object):
     """
@@ -399,3 +401,120 @@ class FSCDTest(KSSDTest):
             n_bootstrap=n_bootstrap, seed=seed)
         self.V = V
 
+
+class ZhengKLTest(CGofTest):
+    """
+    An implementation of 
+    "Zheng 2000, A CONSISTENT TEST OF CONDITIONAL PARAMETRIC DISTRIBUTIONS", 
+    which uses the first order approximation of KL divergence as the decision
+    criterion. 
+    Currently this class only supports conditional density with output 
+    dimension 1. 
+    Args: 
+        p: an instance of UnnormalizedDensity
+        alpha: significance level
+        kx: kernel function for covariates. Default is Zheng's kernel.
+        ky: kernel function for output variables. Default is Zheng's kernel.
+    """
+
+    def __init__(self, p, alpha, kx=None, ky=None):
+        super(ZhengKLTest, self).__init__(p, alpha)
+        if p.dy() != 1:
+            raise ValueError(('this test can be used only '
+                              'for 1-d y'))
+        if not hasattr(p, 'log_normalized_den'):
+            raise ValueError('the density needs to be normalized')
+        self.kx = kx if kx is not None else ZhengKLTest.K1
+        self.ky = ky if ky is not None else ZhengKLTest.K2
+
+    def _integrand(self, y, y0, x, h):
+        y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, 1)
+        y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, 1)
+        x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, 1)
+        val = self.ky((y_-y0_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
+        return val.data.numpy()
+
+    def compute_stat(self, X, Y, h=None): 
+        """
+        Compute the test static. 
+        h: optinal kernel width param
+        """
+        def integrate(y0, x, h):
+            return quad(self._integrand, -np.inf, np.inf, args=(y0, x, h))[0]
+ 
+        n, dx = X.shape
+        dy = Y.shape[1]
+        if h is None:
+           h = n**(-2./5/(dx+dy))
+
+        K1 = self.kx((X.unsqueeze(1)-X)/h)
+        K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
+
+        vec_integrate = np.vectorize(integrate)
+        integrated = torch.from_numpy(vec_integrate(Y, X, h))
+        K = K1 * (K2.T - integrated.T)
+        log_den = self.p.log_normalized_den(X, Y)
+        K /= torch.exp(log_den)
+
+        var = K1**2
+        var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
+        var = var / h**(dx) / (n*(n-1))
+
+        stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
+        stat *= n * h**(-(dx+dy)/2) / var**0.5
+        return stat
+
+    def perform_test(self, X, Y):
+        """
+        X: Torch tensor of size n x dx
+        Y: Torch tensor of size n x dy
+
+        perform the goodness-of-fit test and return values computed in a
+        dictionary:
+        {
+            alpha: 0.01, 
+            pvalue: 0.0002, 
+            test_stat: 2.3, 
+            h0_rejected: True, 
+            time_secs: ...
+        }
+        """
+        with util.ContextTimer() as t:
+            alpha = self.alpha
+            stat = self.compute_stat(X, Y)
+            pvalue = (1 - dists.Normal(0, 1).cdf(stat))
+
+        results = {'alpha': self.alpha, 'pvalue': pvalue,
+                   'test_stat': stat.item(),
+                   'h0_rejected': pvalue < alpha, 'time_secs': t.secs,
+                   }
+        return results
+
+    @staticmethod
+    def K1(X):
+        """
+        Kernel function for explanation variables used in Zheng's paper.
+        Dimension-wise product of Epanechnikov kernel.
+
+        X: Torch tensor of size n x dx
+        Return: Evaluated kernel value of size n
+        """
+        K = torch.zeros(X.shape)
+        idx = (torch.abs(X) < 1)
+        K[idx] = 0.75 * (1 - X[idx]**2)
+        return torch.prod(K, dim=-1)
+
+    @staticmethod
+    def K2(Y, h):
+        """
+        Kernel function for dependent variables used in Zheng's paper. 
+        X: Torch tensor of size n x dy
+        Return: kernel evaluated at Y of size n
+        """
+        K = torch.zeros(Y.shape)
+        weight = 1 - torch.exp(torch.tensor(-2./h))
+        pos_idx = (Y>=0) & (Y<1./h)
+        K[pos_idx] = 2.*torch.exp(-2*Y[pos_idx]) / weight
+        neg_idx = (Y<0) & (Y>-1./h)
+        K[neg_idx] = 2.*torch.exp(-2*(Y[neg_idx]+1./h)) / weight
+        return torch.prod(K, dim=-1)
