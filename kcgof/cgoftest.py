@@ -292,7 +292,8 @@ class FSCDPowerCriterion(object):
             optimizer.step()
             # constraint satisfaction
             constraint_f(params, V)
-            objs[t] = obj.detach()
+            # Flip the sign back
+            objs[t] = -obj.detach()
         return objs
 
     def _point_power_criterion(self, V, reg=1e-5):
@@ -327,7 +328,20 @@ class FSCDPowerCriterion(object):
     #     Evaluate the standard deviation of the the distribution of FSCD under H1.
     #     Use V as the set of J test locations.
     #     """
-    #     raise NotImplementedError()
+    #     kssdtest = self.kssdtest
+    #     k = self.k
+
+    #     h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+    #     n = h.shape[0]
+    #     J, dx = V.shape
+
+    #     # n x J
+    #     Phi = k.eval(self.X, V)
+    #     Kbar = Phi.matmul(Phi.T)/J
+    #     # standard deviation under H1.
+    #     hKbar = h*Kbar
+    #     sigma_V = 2.0*torch.std(torch.mean(h*Kbar, 1))
+    #     return sigma_V
     
     def _eval_witness_loop(self, at):
         """
