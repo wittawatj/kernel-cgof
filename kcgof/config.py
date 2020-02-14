@@ -8,6 +8,8 @@ import kcgof.glo as glo
 import os
 import torch
 
+# All keys with prefix ex_ are only relevant for batch experiments i.e.,
+# relevant to experiment scripts under kcgof/ex/
 _default_config = {
     #  default torch data type
     'torch_dtype': torch.double,
@@ -17,7 +19,7 @@ _default_config = {
 
     # Full path to the directory to store temporary files when running
     # experiments.     
-    'ex_scratch_path': '/is/ei/wittawat/tmp/kmod',
+    'ex_scratch_path': '/is/ei/wittawat/tmp/kcgof',
 
     # Slurm partitions.
     # When using SlurmComputationEngine for running the experiments, the partitions (groups of computing nodes)

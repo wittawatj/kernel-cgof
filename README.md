@@ -23,3 +23,7 @@ To install the package for development purpose, follow the following steps:
 4. In a Python shell, make sure that you can `import kcgof` without any error.
 
 The `-e` flag offers an "edit mode", meaning that changes to any files in this repo will be reflected immediately in the imported package.
+
+## Experiments
+
+Batch experiments require https://github.com/wittawatj/independent-jobs .
