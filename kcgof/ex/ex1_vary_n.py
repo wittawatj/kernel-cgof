@@ -6,8 +6,10 @@ import kcgof
 import kcgof.log as log
 import kcgof.glo as glo
 import kcgof.cdata as cdat
+import kcgof.cgoftest as cgof
 import kcgof.cdensity as cden
 import kcgof.kernel as ker
+import kcgof.util as util
 
 # need independent_jobs package 
 # https://github.com/wittawatj/independent-jobs
@@ -23,6 +25,7 @@ import numpy as np
 import math
 import os
 import sys 
+import torch
 
 """
 All the method functions (starting with met_) return a dictionary with the
@@ -36,6 +39,8 @@ following keys:
 
 All the method functions take the following mandatory inputs:
     - p: a kcgof.cdensity.UnnormalizedCondDensity (candidate conditional model)
+    - rx: an object that can be sample(..)'ed. Following the interface of a
+        distribution in torch.distributions.
     - cond_source: a kcgof.cdata.CondSource for generating the data (i.e., draws
           from r)
     - n: total sample size. Each method function should draw exactly the number
@@ -47,86 +52,36 @@ All the method functions take the following mandatory inputs:
 """
 
 #-------------------------------------------------------
-def met_gkssd_med(p, cond_source, n, r):
+def met_gkssd_med(p, rx, cond_source, n, r):
     """
     KSSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
     med = Use median heuristic to choose the bandwidths for both kernels.
     Compute the median heuristic on the data X and Y separate to get the two
     bandwidths.
     """
-    pass
+    cs = cond_source
+    with util.TorchSeedContext(seed=r):
+        X = rx(n)
+    Y = cs(X, seed=r+100)
 
-# def met_gumeJ1_2sopt_tr50(P, Q, data_source, n, r, J=1, tr_proportion=0.5):
-#     """
-#     UME-based three-sample test
-#         * Use J=1 test location by default. 
-#         * 2sopt = optimize the two sets of test locations by maximizing the
-#             2-sample test's power criterion. Each set is optmized separately.
-#         * Gaussian kernels for the two UME statistics. The Gaussian widths are
-#         also optimized separately.
-#     """
-#     if not P.has_datasource() or not Q.has_datasource():
-#         # Not applicable. Return {}.
-#         return {}
-#     assert J >= 1
+    # start timing
+    with util.ContextTimer() as t:
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=1000)
+        sigy = util.pt_meddistance(Y, subsample=1000)
 
-#     ds_p = P.get_datasource()
-#     ds_q = Q.get_datasource()
-#     # sample some data 
-#     datp, datq, datr = sample_pqr(ds_p, ds_q, data_source, n, r, only_from_r=False)
+        # kernels
+        # k = kernel on X
+        k = ker.PTKGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = ker.PTKGauss(sigma2=sigy**2)
 
-#     # Start the timer here
-#     with util.ContextTimer() as t:
-#         # split the data into training/test sets
-#         [(datptr, datpte), (datqtr, datqte), (datrtr, datrte)] = \
-#             [D.split_tr_te(tr_proportion=tr_proportion, seed=r) for D in [datp, datq, datr]]
-#         Xtr, Ytr, Ztr = [D.data() for D in [datptr, datqtr, datrtr]]
+        # Construct a KSSD test object
+        kssdtest = cgof.KSSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
+        result = kssdtest.perform_test(X, Y)
 
-#         # initialize optimization parameters.
-#         # Initialize the Gaussian widths with the median heuristic
-#         medxz = util.meddistance(np.vstack((Xtr, Ztr)), subsample=1000)
-#         medyz = util.meddistance(np.vstack((Ytr, Ztr)), subsample=1000)
-#         gwidth0p = medxz**2
-#         gwidth0q = medyz**2
-
-#         # numbers of test locations in V, W
-#         Jp = J
-#         Jq = J
-
-#         # pick a subset of points in the training set for V, W
-#         Xyztr = np.vstack((Xtr, Ytr, Ztr))
-#         VW = util.subsample_rows(Xyztr, Jp+Jq, seed=r+1)
-#         V0 = VW[:Jp, :]
-#         W0 = VW[Jp:, :]
-
-#         # optimization options
-#         opt_options = {
-#             'max_iter': 100,
-#             'reg': 1e-4,
-#             'tol_fun': 1e-6,
-#             'locs_bounds_frac': 50,
-#             'gwidth_lb': 0.1,
-#             'gwidth_ub': 10**2,
-#         }
-
-#         umep_params, umeq_params = mct.SC_GaussUME.optimize_2sets_locs_widths(
-#             datptr, datqtr, datrtr, V0, W0, gwidth0p, gwidth0q, 
-#             **opt_options)
-#         (V_opt, gw2p_opt, opt_infop) = umep_params
-#         (W_opt, gw2q_opt, opt_infoq) = umeq_params
-#         k_opt = kernel.KGauss(gw2p_opt)
-#         l_opt = kernel.KGauss(gw2q_opt)
-
-#         # construct a UME test
-#         scume_opt2 = mct.SC_UME(datpte, datqte, k_opt, l_opt, V_opt, W_opt,
-#                 alpha=alpha)
-#         scume_opt2_result = scume_opt2.perform_test(datrte)
-
-#     return {
-#             # This key "test" can be removed. Storing V, W can take quite a lot
-#             # of space, especially when the input dimension d is high.
-#             #'test':scume, 
-#             'test_result': scume_opt2_result, 'time_secs': t.secs}
+    return { 'test': kssdtest,
+        'test_result': result, 'time_secs': t.secs}
 
 # def met_gmmd_med(P, Q, data_source, n, r):
 #     """
@@ -170,7 +125,7 @@ def met_gkssd_med(p, cond_source, n, r):
 # Define our custom Job, which inherits from base class IndependentJob
 class Ex1Job(IndependentJob):
    
-    def __init__(self, aggregator, p, cond_source, prob_label, rep, met_func, n):
+    def __init__(self, aggregator, p, rx, cond_source, prob_label, rep, met_func, n):
         #walltime = 60*59*24 
         walltime = 60*59
         memory = int(n*1e-2) + 50
@@ -179,6 +134,7 @@ class Ex1Job(IndependentJob):
                                memory=memory)
                                
         self.p = p
+        self.rx = rx
         self.cond_source = cond_source
         self.prob_label = prob_label
         self.rep = rep
@@ -189,10 +145,9 @@ class Ex1Job(IndependentJob):
     # of JobResult base class
     def compute(self):
 
-        raise NotImplementedError()
-        P = self.P
-        Q = self.Q
-        data_source = self.data_source 
+        p = self.p
+        rx = self.rx
+        cs = self.cond_source 
         r = self.rep
         n = self.n
         met_func = self.met_func
@@ -201,7 +156,7 @@ class Ex1Job(IndependentJob):
         logger.info("computing. %s. prob=%s, r=%d,\
                 n=%d"%(met_func.__name__, prob_label, r, n))
         with util.ContextTimer() as t:
-            job_result = met_func(P, Q, data_source, n, r)
+            job_result = met_func(p, rx, cs, n, r)
 
             # create ScalarResult instance
             result = SingleResult(job_result)
@@ -220,7 +175,7 @@ class Ex1Job(IndependentJob):
 # This import is needed so that pickle knows about the class Ex1Job.
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
-from kcgof.ex.ex1_vary_n import met_gmmd_med
+# from kcgof.ex.ex1_vary_n import met_gmmd_med
 
 #--- experimental setting -----
 ex = 1
@@ -229,11 +184,11 @@ ex = 1
 alpha = 0.05
 
 # repetitions for each sample size 
-reps = 20
+reps = 2
 
 # tests to try
 method_funcs = [ 
-    met_gmmd_med,
+    met_gkssd_med,
     # met_gmmd_med_bounliphone,
    ]
 
@@ -247,6 +202,9 @@ def get_ns_model_source(prob_label):
     Given the problem key prob_label, return (ns, p, cs), a tuple of
     - ns: a list of sample sizes n's
     - p: a kcgof.cdensity.UnnormalizedCondDensity representing the model p
+    - rx: a callable object that takes n (saple size) and return a torch
+        tensor of size n x d where d is the appropriate dimension. Represent the
+        marginal distribuiton of x
     - cs: a kcgof.cdata.CondSource. The CondSource generates sample from the
         distribution r.
 
@@ -259,6 +217,8 @@ def get_ns_model_source(prob_label):
             [100, 300, 600, 900],
             # p 
             cden.CDGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
+            # rx
+            lambda n: util.pt_sample_standard_normal(n, d=5),
             # CondSource for r]
             cdat.CSGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             ),
@@ -273,7 +233,7 @@ def get_ns_model_source(prob_label):
     return prob2tuples[prob_label]
 
 
-def run_problem(prob_label):
+def run_problem(prob_label, use_cluster=False):
     """Run the experiment"""
     # ///////  submit jobs //////////
     # create folder name string
@@ -289,17 +249,20 @@ def run_problem(prob_label):
     batch_parameters = BatchClusterParameters(
         foldername=foldername, job_name_base="e%d_"%ex, parameter_prefix="")
 
-    # Use the following line if Slurm queue is not used.
-    #engine = SerialComputationEngine()
-    partitions = config['ex_slurm_partitions']
-    if partitions is None:
-        engine = SlurmComputationEngine(batch_parameters)
+    if use_cluster:
+        # use a Slurm cluster
+        partitions = config['ex_slurm_partitions']
+        if partitions is None:
+            engine = SlurmComputationEngine(batch_parameters)
+        else:
+            engine = SlurmComputationEngine(batch_parameters, partition=partitions)
     else:
-        engine = SlurmComputationEngine(batch_parameters, partition=partitions)
+        # Use the following line if Slurm queue is not used.
+        engine = SerialComputationEngine()
     n_methods = len(method_funcs)
 
     # problem setting
-    ns, p, cs = get_ns_model_source(prob_label)
+    ns, p, rx, cs = get_ns_model_source(prob_label)
 
     # repetitions x len(ns) x #methods
     aggregators = np.empty((reps, len(ns), n_methods ), dtype=object)
@@ -320,7 +283,7 @@ def run_problem(prob_label):
                     aggregators[r, ni, mi] = sra
                 else:
                     # result not exists or rerun
-                    job = Ex1Job(SingleResultAggregator(), p, cs,
+                    job = Ex1Job(SingleResultAggregator(), p, rx, cs,
                         prob_label, r, f, n)
 
                     agg = engine.submit_job(job)

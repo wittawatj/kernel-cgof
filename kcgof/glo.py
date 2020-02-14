@@ -14,7 +14,7 @@ def get_root():
 def result_folder():
     """Return the full path to the result/ folder containing experimental result 
     files"""
-    return _get_key_from_default_config(['ex_results_path'])
+    return _get_key_from_default_config('ex_results_path')
 
 def _get_key_from_default_config(key):
     """
