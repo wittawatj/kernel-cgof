@@ -127,6 +127,67 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     return { 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_gfscd_J1_opt(p, rx, cond_source, n, r, J=1):
+    """
+    FSCD test with Gaussian kernels on both X and Y.
+    Optimize both Gaussian bandwidhts and the test locations by maximizing
+    the test power.
+    The proportion of the training data used for the optimization is
+    controlled by tr_proportion.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # fit a Gaussian and draw J locations as an initial point for V
+        npV = util.fit_gaussian_sample(X.detach().numpy(), J, seed=r+55)
+        V = torch.tensor(npV, dtype=torch.float)
+
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=1000)
+        sigy = util.pt_meddistance(Y, subsample=1000)
+
+        # kernels
+        # k = kernel on X
+        k = ker.PTKGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = ker.PTKGauss(sigma2=sigy**2)
+
+        # split the data 
+        cd = cdat.CondData(X, Y)
+        tr, te = cd.split_tr_te(tr_proportion=tr_proportion)
+
+        # training data
+        Xtr, Ytr = tr.xy()
+        abs_min, abs_max = torch.min(Xtr).item(), torch.max(Xtr).item()
+        abs_std = torch.std(Xtr).item()
+
+        # parameter tuning
+        fscd_pc = cgof.FSCDPowerCriterion(p, k, l, Xtr, Ytr)
+        max_iter = 200
+        # learning rate
+        lr = 1e-2
+        # regularization parameter when forming the power criterion
+        reg = 1e-3
+
+        # constraint satisfaction function
+        def con_f(params, V):
+            ksigma2 = params[0]
+            lsigma2 = params[1]
+            ksigma2.data.clamp_(min=1e-2, max=10*sigx**2)
+            lsigma2.data.clamp_(min=1e-2, max=10*sigy**2)
+            V.data.clamp_(min=abs_min - 2.0*abs_std, max=abs_max + 2.0*abs_std)
+
+        # do the optimization. Parameters are optimized in-place
+        fscd_pc.optimize_params([k.sigma2, l.sigma2], V, constraint_f=con_f,
+            lr=lr, reg=reg, max_iter=max_iter)
+
+        # Now that k, l, and V are optimized. Construct a FSCD test object
+        fscdtest = cgof.FSCDTest(p, k, l, V, alpha=alpha, n_bootstrap=400, seed=r+8)
+        result = fscdtest.perform_test(X, Y)
+
+    return { 'test': fscdtest,
+        'test_result': result, 'time_secs': t.secs}
+
 def met_zhengkl(p, rx, cond_source, n, r):
     """
     "Zheng 2000, A CONSISTENT TEST OF CONDITIONAL PARAMETRIC DISTRIBUTIONS", 
@@ -240,12 +301,17 @@ from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
+from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt
 
 #--- experimental setting -----
 ex = 1
 
 # significance level of the test
 alpha = 0.05
+
+# Proportion of training sample relative to the full sample size n. 
+# Only used by tests that do data splitting for parameter optimization.
+tr_proportion = 0.5
 
 # repetitions for each sample size 
 reps = 20
@@ -255,6 +321,7 @@ method_funcs = [
     met_gkssd_med,
     # met_zhengkl,
     met_gfscd_J1_rand,
+    met_gfscd_J1_opt,
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current
