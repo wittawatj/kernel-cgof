@@ -49,6 +49,8 @@ class CGofTest(object):
             time_secs: ...
         }
 
+        All values in the rutned dictionary should be scalar or numpy arrays
+        if possible (avoid torch tensors).
         """
         raise NotImplementedError()
 
