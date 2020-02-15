@@ -25,6 +25,8 @@ import numpy as np
 import math
 import os
 import sys 
+import scipy
+import scipy.stats as stats
 import torch
 
 """
@@ -50,6 +52,18 @@ All the method functions take the following mandatory inputs:
     -------
     - A method function may have more arguments which have default values.
 """
+def sample_xy(rx, cond_source, n, rep):
+    """
+    rep: repetition/trial index
+    All methods should call this to get the exact same data X,Y in each trial.
+    """
+    cs = cond_source
+    r = rep
+    with util.TorchSeedContext(seed=r):
+        X = rx(n)
+    Y = cs(X, seed=r+100)
+    return (X, Y)
+
 
 #-------------------------------------------------------
 def met_gkssd_med(p, rx, cond_source, n, r):
@@ -59,10 +73,7 @@ def met_gkssd_med(p, rx, cond_source, n, r):
     Compute the median heuristic on the data X and Y separate to get the two
     bandwidths.
     """
-    cs = cond_source
-    with util.TorchSeedContext(seed=r):
-        X = rx(n)
-    Y = cs(X, seed=r+100)
+    X, Y = sample_xy(rx, cond_source, n, r)
 
     # start timing
     with util.ContextTimer() as t:
@@ -81,6 +92,57 @@ def met_gkssd_med(p, rx, cond_source, n, r):
         result = kssdtest.perform_test(X, Y)
 
     return { 'test': kssdtest,
+        'test_result': result, 'time_secs': t.secs}
+
+def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
+    """
+    FSCD test with Gaussian kernels on both X and Y.
+    * Use J=1 random test location by default.
+    * The test locations are drawn from a Gaussian fitted to the data drawn
+        from rx.
+    * Bandwithds of the Gaussian kernels are determined by the median
+        heuristic.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # fit a Gaussian and draw J locations
+        npV = util.fit_gaussian_sample(X.detach().numpy(), J, seed=r+55)
+        V = torch.tensor(npV, dtype=torch.float)
+
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=1000)
+        sigy = util.pt_meddistance(Y, subsample=1000)
+
+        # kernels
+        # k = kernel on X
+        k = ker.PTKGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = ker.PTKGauss(sigma2=sigy**2)
+
+        # Construct a FSCD test object
+        fscdtest = cgof.FSCDTest(p, k, l, V, alpha=alpha, n_bootstrap=400, seed=r+8)
+        result = fscdtest.perform_test(X, Y)
+
+    return { 'test': fscdtest,
+        'test_result': result, 'time_secs': t.secs}
+
+def met_zhengkl(p, rx, cond_source, n, r):
+    """
+    "Zheng 2000, A CONSISTENT TEST OF CONDITIONAL PARAMETRIC DISTRIBUTIONS", 
+    which uses the first order approximation of KL divergence as the decision
+    criterion. 
+    Use cgoftest.ZhengKLTest.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+
+        # the test
+        zheng_test = cgof.ZhengKLTest(p, alpha)
+        result = zheng_test.perform_test(X, Y)
+
+    return { 'test': zheng_test,
         'test_result': result, 'time_secs': t.secs}
 
 # def met_gmmd_med(P, Q, data_source, n, r):
@@ -176,6 +238,8 @@ class Ex1Job(IndependentJob):
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
+from kcgof.ex.ex1_vary_n import met_zhengkl
+from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 
 #--- experimental setting -----
 ex = 1
@@ -184,11 +248,13 @@ ex = 1
 alpha = 0.05
 
 # repetitions for each sample size 
-reps = 2
+reps = 20
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
+    # met_zhengkl,
+    met_gfscd_J1_rand,
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current

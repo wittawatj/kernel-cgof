@@ -85,3 +85,17 @@ def pt_meddistance(X, subsample=None, seed=283):
         # recursion just once
         return pt_meddistance(X[ind], None, seed=seed)
 
+def fit_gaussian_sample(X, J, seed=29):
+    """
+    Fit a multivariate normal to the data X (n x d) and draw J points 
+    from the fit. 
+    """
+    with NumpySeedContext(seed=seed):
+        d = X.shape[1]
+        mean_x = np.mean(X, 0)
+        cov_x = np.cov(X.T)
+        if d==1:
+            cov_x = np.array([[cov_x]])
+        V = np.random.multivariate_normal(mean_x, cov_x, J)
+    return V
+

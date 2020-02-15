@@ -16,6 +16,8 @@ def get_func_tuples():
     """
     func_tuples = [
         ('met_gkssd_med', 'KSSD-med', 'r--^'),
+        ('met_gfscd_J1_rand', 'FSCD-rand J1', 'b--*'),
+        ('met_zhengkl', 'Zheng', 'm-x'),
         # ('met_gumeJ5_3sopt_tr20', 'Rel-UME J5', 'r-^'),
         # ('met_gfssdJ1_3sopt_tr20', 'Rel-FSSD J1', 'C4--'),
         # ('met_gfssdJ5_3sopt_tr20', 'Rel-FSSD J5', 'b-x'),
@@ -181,7 +183,7 @@ def plot_2d_cond_model(p, px, X, Y, domX, domY, figsize=(10, 6), height_ratios=[
     # ax1.set_xticklabels([])
     npX = X.detach().numpy()
     npY = Y.detach().numpy()
-    ax1.plot(npX, npY, 'bo')
+    ax1.plot(npX, npY, 'bo', markersize=4)
     ax1.set_ylabel('$p(y|x)$')
     # ax1.grid(True)
     # plt.colorbar()

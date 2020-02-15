@@ -60,22 +60,22 @@ class CondData(object):
         """Return (X, Y) as a tuple"""
         return (self.X, self.Y)
 
-    # def split_tr_te(self, tr_proportion=0.5, seed=820):
-    #     """Split the dataset into training and test sets. Assume n is the same 
-    #     for both X, Y. 
+    def split_tr_te(self, tr_proportion=0.5, seed=820):
+        """Split the dataset into training and test sets. Assume n is the same 
+        for both X, Y. 
         
-    #     Return (PairedData for tr, PairedData for te)"""
-    #     X = self.X
-    #     Y = self.Y
-    #     nx, dx = X.shape
-    #     ny, dy = Y.shape
-    #     if nx != ny:
-    #         raise ValueError('Require nx = ny')
-    #     Itr, Ite = util.tr_te_indices(nx, tr_proportion, seed)
-    #     label = '' if self.label is None else self.label
-    #     tr_data = PairedData(X[Itr, :], Y[Itr, :], 'tr_' + label)
-    #     te_data = PairedData(X[Ite, :], Y[Ite, :], 'te_' + label)
-    #     return (tr_data, te_data)
+        Return (CondData for tr, CondData for te)"""
+        # torch tensors
+        X = self.X
+        Y = self.Y
+        nx, dx = X.shape
+        ny, dy = Y.shape
+        if nx != ny:
+            raise ValueError('Require nx = ny')
+        Itr, Ite = util.tr_te_indices(nx, tr_proportion, seed)
+        tr_data = CondData(X[Itr], Y[Itr])
+        te_data = CondData(X[Ite], Y[Ite])
+        return (tr_data, te_data)
 
     # def subsample(self, n, seed=87):
     #     """Subsample without replacement. Return a new PairedData """
