@@ -412,6 +412,7 @@ class ZhengKLTest(CGofTest):
     criterion. 
     Currently this class only supports conditional density with output 
     dimension 1. 
+    The model paramter is assumed to be fixed at the best one (no estimator). 
     Args: 
         p: an instance of UnnormalizedDensity
         alpha: significance level
@@ -419,7 +420,7 @@ class ZhengKLTest(CGofTest):
         ky: kernel function for output variables. Default is Zheng's kernel.
     """
 
-    def __init__(self, p, alpha, kx=None, ky=None):
+    def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
         super(ZhengKLTest, self).__init__(p, alpha)
         if p.dy() != 1:
             raise ValueError(('this test can be used only '
@@ -428,12 +429,13 @@ class ZhengKLTest(CGofTest):
             raise ValueError('the density needs to be normalized')
         self.kx = kx if kx is not None else ZhengKLTest.K1
         self.ky = ky if ky is not None else ZhengKLTest.K2
+        self.rate = rate
 
     def _integrand(self, y, y0, x, h):
         y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, 1)
         y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, 1)
         x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, 1)
-        val = self.ky((y_-y0_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
+        val = self.ky((y0_-y_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
         return val.data.numpy()
 
     def compute_stat(self, X, Y, h=None): 
@@ -447,14 +449,14 @@ class ZhengKLTest(CGofTest):
         n, dx = X.shape
         dy = Y.shape[1]
         if h is None:
-           h = n**(-2./5/(dx+dy))
+           h = n**((self.rate-1.)/(dx+dy))
 
         K1 = self.kx((X.unsqueeze(1)-X)/h)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
         vec_integrate = np.vectorize(integrate)
         integrated = torch.from_numpy(vec_integrate(Y, X, h))
-        K = K1 * (K2.T - integrated.T)
+        K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
         K /= torch.exp(log_den)
 
@@ -484,7 +486,7 @@ class ZhengKLTest(CGofTest):
         with util.ContextTimer() as t:
             alpha = self.alpha
             stat = self.compute_stat(X, Y)
-            pvalue = (1 - dists.Normal(0, 1).cdf(stat))
+            pvalue = (1 - dists.Normal(0, 1).cdf(stat)).item()
 
         results = {'alpha': self.alpha, 'pvalue': pvalue,
                    'test_stat': stat.item(),
