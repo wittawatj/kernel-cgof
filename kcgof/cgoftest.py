@@ -432,9 +432,9 @@ class ZhengKLTest(CGofTest):
         self.rate = rate
 
     def _integrand(self, y, y0, x, h):
-        y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, 1)
-        y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, 1)
-        x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, 1)
+        y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, -1)
+        y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, -1)
+        x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, -1)
         val = self.ky((y0_-y_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
         return val.data.numpy()
 
@@ -445,7 +445,7 @@ class ZhengKLTest(CGofTest):
         """
         def integrate(y0, x, h):
             return quad(self._integrand, -np.inf, np.inf, args=(y0, x, h))[0]
- 
+
         n, dx = X.shape
         dy = Y.shape[1]
         if h is None:
@@ -454,8 +454,9 @@ class ZhengKLTest(CGofTest):
         K1 = self.kx((X.unsqueeze(1)-X)/h)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
-        vec_integrate = np.vectorize(integrate)
-        integrated = torch.from_numpy(vec_integrate(Y, X, h))
+        #integrated = torch.from_numpy(vec_integrate(Y, X, h))
+        vec_integrate = np.vectorize(integrate, signature='(n),(m),()->()')
+        integrated = torch.from_numpy(vec_integrate(Y.reshape([n, 1, dy]), X, h))
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
         K /= torch.exp(log_den)
