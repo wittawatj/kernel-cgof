@@ -94,6 +94,9 @@ def met_gkssd_med(p, rx, cond_source, n, r):
     return { 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_gfscd_J5_rand(p, rx, cond_source, n, r):
+    return met_gfscd_J1_rand(p, rx, cond_source, n, r, J=5)
+
 def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     """
     FSCD test with Gaussian kernels on both X and Y.
@@ -127,7 +130,10 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     return { 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
-def met_gfscd_J1_opt(p, rx, cond_source, n, r, J=1):
+def met_gfscd_J5_opt_tr50(p, rx, cond_source, n, r):
+    return met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=5, tr_proportion=0.5)
+
+def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
     """
     FSCD test with Gaussian kernels on both X and Y.
     Optimize both Gaussian bandwidhts and the test locations by maximizing
@@ -301,7 +307,9 @@ from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
-from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt
+from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
+from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr50
+from kcgof.ex.ex1_vary_n import met_gfscd_J5_opt_tr50
 
 #--- experimental setting -----
 ex = 1
@@ -311,7 +319,7 @@ alpha = 0.05
 
 # Proportion of training sample relative to the full sample size n. 
 # Only used by tests that do data splitting for parameter optimization.
-tr_proportion = 0.5
+# tr_proportion = 0.5
 
 # repetitions for each sample size 
 reps = 20
