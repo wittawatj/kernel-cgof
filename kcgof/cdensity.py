@@ -35,6 +35,39 @@ def warn_bounded_domain(self):
 #     """
 #     return UDFromCallable(d, fgrad_log=g)
 
+class DistX(object):
+    """
+    Class representing a distribution on x i.e., r_x(x). 
+    There is no requirement except that it can be sampled.
+    The main purpose of this class is for ease of serialization when running
+    experiments. See for instance in kcgof.ex.ex1_vary_n.
+    """
+    @abstractmethod
+    def sample(self, n):
+        """
+        Return an n x d torch tensor, where d is the appropriate dimension on
+        the data, and n is the sample size.         
+        """
+        raise NotImplementedError()
+
+    def __call__(self, n):
+        return self.sample(n)
+
+class RXIsotropicGaussian(DistX):
+    """
+    A simple isotropic Gaussian prior on x.
+    """
+    def __init__(self, dx):
+        """
+        dx: dimension of x
+        """
+        if dx is None or dx < 0:
+            raise ValueError('dx must be a positive integer. Found {}.'.format(dx))
+        self.dx = dx
+
+    def sample(self, n):
+        return torch.randn(n, self.dx)
+        
 
 class UnnormalizedCondDensity( object):
     """

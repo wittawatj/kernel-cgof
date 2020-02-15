@@ -175,7 +175,7 @@ class Ex1Job(IndependentJob):
 # This import is needed so that pickle knows about the class Ex1Job.
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
-# from kcgof.ex.ex1_vary_n import met_gmmd_med
+from kcgof.ex.ex1_vary_n import met_gkssd_med
 
 #--- experimental setting -----
 ex = 1
@@ -189,7 +189,6 @@ reps = 2
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
-    # met_gmmd_med_bounliphone,
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current
@@ -202,7 +201,7 @@ def get_ns_model_source(prob_label):
     Given the problem key prob_label, return (ns, p, cs), a tuple of
     - ns: a list of sample sizes n's
     - p: a kcgof.cdensity.UnnormalizedCondDensity representing the model p
-    - rx: a callable object that takes n (saple size) and return a torch
+    - rx: a callable object that takes n (sample size) and return a torch
         tensor of size n x d where d is the appropriate dimension. Represent the
         marginal distribuiton of x
     - cs: a kcgof.cdata.CondSource. The CondSource generates sample from the
@@ -211,6 +210,7 @@ def get_ns_model_source(prob_label):
     * (p, cs) together specifies a conditional goodness-of-fit testing problem.
     """
     slope_h0_d5 = torch.arange(5) + 1.0
+    # slope_h0_d20 = torch.arange(20) + 1.0
     prob2tuples = { 
         # A case where H0 is true. Gaussian least squares model.
         'gaussls_h0_d5': (
@@ -218,7 +218,7 @@ def get_ns_model_source(prob_label):
             # p 
             cden.CDGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             # rx
-            lambda n: util.pt_sample_standard_normal(n, d=5),
+            cden.RXIsotropicGaussian(dx=5),
             # CondSource for r]
             cdat.CSGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             ),
