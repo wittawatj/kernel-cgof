@@ -136,7 +136,7 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
         Ytr.requires_grad = False
         kssd_pc = cgof.KSSDPowerCriterion(p, k, l, Xtr, Ytr)
 
-        max_iter = 200
+        max_iter = 100
         # learning rate 
         lr = 1e-3
         # regularization in the power criterion
@@ -245,7 +245,7 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
 
         # parameter tuning
         fscd_pc = cgof.FSCDPowerCriterion(p, k, l, Xtr, Ytr)
-        max_iter = 200
+        max_iter = 100
         # learning rate
         lr = 1e-2
         # regularization parameter when forming the power criterion
