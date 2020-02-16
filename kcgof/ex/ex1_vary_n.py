@@ -2,6 +2,7 @@
 
 __author__ = 'wittawat'
 
+import dill
 import kcgof
 import kcgof.log as log
 import kcgof.glo as glo
@@ -386,7 +387,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 100
+reps = 2
 
 # tests to try
 method_funcs = [ 
@@ -433,12 +434,11 @@ def get_ns_model_source(prob_label):
         ),
 
         # H1 case. dx=dy=1. T(5) noise. Gaussian ordinary LS.
-        #
         # Or r(y|x) = t(5) noise + mx + c, m = c =1
         # p(y|x) =  Gaussian pdf[y - (mx + c), same m and c 
         # r(x) can be any, N(0,1)? 
         'gauss_t_d1': (
-            [100, 300, 500, 700],
+            [100, 300, 500 ],
             # p 
             cden.CDGaussianOLS(slope=torch.ones(1), c=torch.ones(1), variance=1.0),
             # rx
@@ -446,8 +446,31 @@ def get_ns_model_source(prob_label):
             # CondSource for r
             cdat.CSAdditiveNoiseRegression(
                 f=lambda X: 1.0+X, 
-                noise=dists.StudentT(df=5), dx=1)
+                noise=dists.StudentT(df=5), 
+                dx=1
+            )
         ),
+
+        # H1 case (same as Zheng’s): 
+        # r(y|x) = Gaussian pdf[y - (mx + q*x^2 + c)], m = 2. q = c =1
+        # p(y|x) =  Gaussian pdf[y - (mx + c), m=2.  and c=1
+        # r(x) = U[-3,3] (linearity breaks down from approximately |X| > 2) 
+        'quad_vs_lin_d1': (
+            [100, 300, 500 ],
+            # p(y|x)
+            cden.CDGaussianOLS(slope=torch.tensor([2.0]), c=torch.tensor([1.0]), variance=1.0),
+            # rx
+            lambda n: dists.Uniform(low=-3.0, high=3.0).sample((n, 1)),
+            # CondSource for r(y|x)
+            cdat.CSAdditiveNoiseRegression(
+                f=lambda X: 2.0*X + X**2 + 1.0,
+                noise=dists.Normal(0, 1),
+                dx=1
+            )
+
+
+        ),
+
 
         } # end of prob2tuples
     if prob_label not in prob2tuples:
@@ -537,9 +560,10 @@ def run_problem(prob_label, use_cluster=False):
 
     # save results 
     results = {'job_results': job_results, 
-            'p': p, 
-            'cond_source': cs, 
-            'alpha': alpha, 'repeats': reps, 'ns': ns,
+            # 'p': p, 
+            # 'cond_source': cs, 
+            'alpha': alpha, 'repeats': reps, 
+            'ns': ns,
             'method_funcs': method_funcs, 'prob_label': prob_label,
             }
     

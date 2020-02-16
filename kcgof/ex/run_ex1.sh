@@ -9,6 +9,6 @@
 # screen -S ex1_kgof -X screen -t tab7 bash -lic "python ex1_vary_n.py gbrbm_dx50_dh40_h0"
 # screen -S ex1_kgof -X screen -t tab7 bash -lic "python ex1_vary_n.py gbrbm_dx50_dh10_vp1"
 # screen -S ex1_kgof -X screen -t tab7 bash -lic "python ex1_vary_n.py gbrbm_dx50_dh40_vp1"
-
+python ex1_vary_n.py quad_vs_lin_d1
 python ex1_vary_n.py gauss_t_d1
 python ex1_vary_n.py gaussls_h0_d5
