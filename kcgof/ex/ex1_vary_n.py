@@ -143,8 +143,8 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
         def con_f(params):
             ksigma2 = params[0]
             lsigma2 = params[1]
-            ksigma2.data.clamp_(min=1e-2, max=10*sigx**2)
-            lsigma2.data.clamp_(min=1e-2, max=10*sigy**2)
+            ksigma2.data.clamp_(min=1e-1, max=10*sigx**2)
+            lsigma2.data.clamp_(min=1e-1, max=10*sigy**2)
         
         kssd_pc.optimize_params(
             [k.sigma2, l.sigma2], constraint_f=con_f,
@@ -173,8 +173,10 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     X, Y = sample_xy(rx, cond_source, n, r)
     # start timing
     with util.ContextTimer() as t:
+        tr, te = cdat.CondSource(X, Y).split_tr_te(tr_proportion=0.5)
+        Xtr, Ytr = tr.xy()
         # fit a Gaussian and draw J locations
-        npV = util.fit_gaussian_sample(X.detach().numpy(), J, seed=r+55)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+55)
         V = torch.tensor(npV, dtype=torch.float)
 
         # median heuristic
@@ -189,6 +191,7 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
 
         # Construct a FSCD test object
         fscdtest = cgof.FSCDTest(p, k, l, V, alpha=alpha, n_bootstrap=400, seed=r+8)
+        # test on the full samples
         result = fscdtest.perform_test(X, Y)
 
     return { 'test': fscdtest,
@@ -208,8 +211,16 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
     X, Y = sample_xy(rx, cond_source, n, r)
     # start timing
     with util.ContextTimer() as t:
+        # split the data 
+        cd = cdat.CondData(X, Y)
+        tr, te = cd.split_tr_te(tr_proportion=tr_proportion)
+
+        # training data
+        Xtr, Ytr = tr.xy()
+
         # fit a Gaussian and draw J locations as an initial point for V
-        npV = util.fit_gaussian_sample(X.detach().numpy(), J, seed=r+55)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+55)
+
         V = torch.tensor(npV, dtype=torch.float)
 
         # median heuristic
@@ -222,12 +233,6 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         # l = kernel on Y
         l = ker.PTKGauss(sigma2=sigy**2)
 
-        # split the data 
-        cd = cdat.CondData(X, Y)
-        tr, te = cd.split_tr_te(tr_proportion=tr_proportion)
-
-        # training data
-        Xtr, Ytr = tr.xy()
         abs_min, abs_max = torch.min(Xtr).item(), torch.max(Xtr).item()
         abs_std = torch.std(Xtr).item()
 
@@ -243,8 +248,8 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         def con_f(params, V):
             ksigma2 = params[0]
             lsigma2 = params[1]
-            ksigma2.data.clamp_(min=1e-2, max=10*sigx**2)
-            lsigma2.data.clamp_(min=1e-2, max=10*sigy**2)
+            ksigma2.data.clamp_(min=1e-1, max=10*sigx**2)
+            lsigma2.data.clamp_(min=1e-1, max=10*sigy**2)
             V.data.clamp_(min=abs_min - 2.0*abs_std, max=abs_max + 2.0*abs_std)
 
         # do the optimization. Parameters are optimized in-place
@@ -254,6 +259,7 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         # Now that k, l, and V are optimized. Construct a FSCD test object
         fscdtest = cgof.FSCDTest(p, k, l, V, alpha=alpha, n_bootstrap=400, seed=r+8)
         Xte, Yte = te.xy()
+        # test only on the test samples
         result = fscdtest.perform_test(Xte, Yte)
 
     return { 'test': fscdtest,
@@ -388,7 +394,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 2
+reps = 70
 
 # tests to try
 method_funcs = [ 
@@ -442,7 +448,7 @@ def get_ns_model_source(prob_label):
             [100, 300, 500],
             # p
             cden.CDAdditiveNoiseRegression(
-                f=lambda X: 1.5*X + X**2 + 1.0,
+                f=lambda X: 1.8*X + X**2 + 1.0,
                 noise=dists.Normal(0, 1),
                 dx=1
             ),
@@ -475,19 +481,19 @@ def get_ns_model_source(prob_label):
         ),
 
         # H1 case (same as Zheng’s): 
-        # r(y|x) = Gaussian pdf[y - (mx + q*x^2 + c)], m = 2. q = c =1
-        # p(y|x) =  Gaussian pdf[y - (mx + c), m=2.  and c=1
+        # r(y|x) = Gaussian pdf[y - (mx + q*x^2 + c)], m = 1. c =1. q should be low
+        # p(y|x) =  Gaussian pdf[y - (mx + c), m=1.  and c=1
         # r(x) = U[-3,3] (linearity breaks down from approximately |X| > 2) 
         'quad_vs_lin_d1': (
             [100, 300, 500 ],
             # p(y|x)
-            cden.CDGaussianOLS(slope=torch.tensor([2.0]), c=torch.tensor([1.0]), variance=1.0),
+            cden.CDGaussianOLS(slope=torch.tensor([1.0]), c=torch.tensor([1.0]), variance=1.0),
             # rx
             lambda n: dists.Uniform(low=-3.0, high=3.0).sample((n, 1)),
             # CondSource for r(y|x)
             cdat.CSAdditiveNoiseRegression(
-                f=lambda X: 2.0*X + X**2 + 1.0,
-                noise=dists.Normal(0, 1),
+                f=lambda X: 1.0*X + 0.1*X**2 + 1.0,
+                noise=dists.Normal(0, 1.0),
                 dx=1
             )
 
