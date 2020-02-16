@@ -122,6 +122,47 @@ class CondSource(object):
 
 # end class CondSource
 
+class CSGaussianHetero(CondSource):
+    """
+    A CondSource for CDGaussianHetero
+    p(y|x) = f(x) + N(0, \sigma^2(x))
+    A (potentially nonlinear) regression model with Gaussian noise where the
+    noise variance can depend on the input x (heteroscedastic).
+    """
+    def __init__(self, f, f_variance, dx):
+        """
+        :param f: the mean function. A torch callable module.
+        :param f_variance:  a callable object (n, ...) |-> (n,)
+        :param dx: dimension of x. A positive integer
+        """
+        self.f = f
+        self.f_variance = f_variance
+        self._dx = dx
+
+    def cond_pair_sample(self, X, seed):
+        if X.shape[1] != self._dx:
+            raise ValueError('Input dimension in X (found {}) does not match dx ({}) as specified by the model.'.format(X.shape[1], self._dx))
+        n = X.shape[0]
+        # mean
+        f = self.f
+        fX = f(X)
+        # compute the variance at each x. Expect same shape as X
+        f_variance = self.f_variance
+        fVar = f_variance(X)
+        if fVar.shape[0] != X.shape[0]:
+            raise ValueError('f_variance does not return the same number of rows as in X. Was {} whereas X.shapep[0] = {}. f_varice must return a {} x 1 tensor in this case.'.format(fVar.shape[0], X.shape[0], X.shape[0]))
+
+        fStd = torch.sqrt(fVar)
+        with util.TorchSeedContext(seed=seed):
+            Y = torch.randn((n, 1))*fStd.reshape(n, 1) + fX.reshape(n, 1)
+        return Y
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return 1
+
 class CSAdditiveNoiseRegression(CondSource):
     """
     CondSource for CDAdditiveNoiseRegression.

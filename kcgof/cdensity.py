@@ -172,6 +172,55 @@ class UnnormalizedCondDensity( object):
 
 # end UnnormalizedCondDensity
 
+class CDGaussianHetero(UnnormalizedCondDensity):
+    """
+    p(y|x) = f(x) + N(0, \sigma^2(x))
+    A (potentially nonlinear) regression model with Gaussian noise where the noise variance can depend on the input x (heteroscedastic).
+    """
+    def __init__(self, f, f_variance, dx):
+        """
+        :param f: the mean function. A torch callable module.
+        :param f_variance:  a callable object (n, ...) |-> (n,)
+        :param dx: dimension of x. A positive integer
+        """
+        self.f = f
+        self.f_variance = f_variance
+        self._dx = dx
+
+    def log_den(self, X, Y):
+        super().log_den(X, Y)
+        return self.log_normalized_den(X, Y)
+
+    def log_normalized_den(self, X, Y):
+        # Y has to be n x 1
+        super().log_den(X, Y)
+        n = X.shape[0]
+        f = self.f
+        f_variance = self.f_variance
+
+        # compute the mean f(x)
+        fX = f(X)
+        assert fX.shape[1] == 1
+        # compute the variance at each x. Expect same shape as X
+        fVar = f_variance(X)
+        if fVar.shape[0] != X.shape[0]:
+            raise ValueError('f_variance does not return the same number of rows as in X. Was {} whereas X.shapep[0] = {}. f_varice must return a {} x 1 tensor in this case.'.format(fVar.shape[0], X.shape[0], X.shape[0]))
+
+        fStd = torch.sqrt(fVar).reshape(n, 1)
+        stdnorm = dists.Normal(0, 1)
+        log_prob = stdnorm.log_prob((Y - fX)/fStd) - torch.log(fStd)
+        assert log_prob.shape[0] == X.shape[0]
+        return log_prob
+
+    def get_condsource(self):
+        return cdat.CSGaussianHetero(self.f, self.f_variance, self.dx())
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return 1
+
 class CDAdditiveNoiseRegression(UnnormalizedCondDensity):
     """
     Implement p(y|x) = f(x) + noise.

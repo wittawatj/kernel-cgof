@@ -322,14 +322,14 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 20
+reps = 100
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
     # met_zhengkl,
     met_gfscd_J1_rand,
-    met_gfscd_J1_opt,
+    met_gfscd_J1_opt_tr50,
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current
