@@ -98,6 +98,9 @@ def met_gkssd_med(p, rx, cond_source, n, r):
     return { 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_gkssd_opt_tr30(p, rx, cond_source, n, r):
+    return met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.3)
+
 def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
     """
     KSSD test with Gaussian kernels (for both kernels). 
@@ -158,6 +161,7 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
 
     return { 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
+
 def met_gfscd_J5_rand(p, rx, cond_source, n, r):
     return met_gfscd_J1_rand(p, rx, cond_source, n, r, J=5)
 
@@ -196,6 +200,9 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
 
     return { 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
+
+def met_gfscd_J5_opt_tr30(p, rx, cond_source, n, r):
+    return met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=5, tr_proportion=0.3)
 
 def met_gfscd_J5_opt_tr50(p, rx, cond_source, n, r):
     return met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=5, tr_proportion=0.5)
@@ -377,11 +384,13 @@ class Ex1Job(IndependentJob):
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
+from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_opt_tr50
+from kcgof.ex.ex1_vary_n import met_gfscd_J5_opt_tr30
 
 #--- experimental setting -----
 ex = 1
@@ -399,11 +408,13 @@ reps = 70
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
+    met_gkssd_opt_tr30,
     met_gkssd_opt_tr50,
     # met_zhengkl,
-    met_gfscd_J1_rand,
+    # met_gfscd_J1_rand,
     met_gfscd_J5_rand,
-    met_gfscd_J1_opt_tr50,
+    # met_gfscd_J1_opt_tr50,
+    met_gfscd_J5_opt_tr30,
     met_gfscd_J5_opt_tr50,
 
    ]
