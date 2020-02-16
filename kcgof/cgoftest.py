@@ -15,6 +15,10 @@ import torch.optim as optim
 import typing
 from scipy.integrate import quad
 import numpy as np
+import logging
+import freqopttest.tst as tst
+import freqopttest.data as fdata
+
 
 class CGofTest(object):
     """
@@ -527,7 +531,7 @@ class ZhengKLTest(CGofTest):
         y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, -1)
         x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, -1)
         val = self.ky((y0_-y_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
-        return val.data.numpy()
+        return val.numpy()
 
     def compute_stat(self, X, Y, h=None): 
         """
@@ -535,7 +539,16 @@ class ZhengKLTest(CGofTest):
         h: optinal kernel width param
         """
         def integrate(y0, x, h):
-            return quad(self._integrand, -np.inf, np.inf, args=(y0, x, h))[0]
+            return quad(self._integrand, -np.inf, np.inf, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
+
+        def vec_integrate(Y, X, h):
+            int_results = np.empty([Y.shape[0], X.shape[0]])
+            n = Y.shape[0]
+            for i in range(n):
+                for j in range(i, n):
+                    int_results[i, j] = integrate(Y[i], X[j], h)
+                    int_results[j, i] = int_results[i, j]
+            return int_results
 
         n, dx = X.shape
         dy = Y.shape[1]
@@ -545,9 +558,9 @@ class ZhengKLTest(CGofTest):
         K1 = self.kx((X.unsqueeze(1)-X)/h)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
-        #integrated = torch.from_numpy(vec_integrate(Y, X, h))
-        vec_integrate = np.vectorize(integrate, signature='(n),(m),()->()')
-        integrated = torch.from_numpy(vec_integrate(Y.reshape([n, 1, dy]), X, h))
+        integrated = torch.from_numpy(vec_integrate(Y, X, h))
+        # vec_integrate_ = np.vectorize(integrate, signature='(n),(m),()->()')
+        # integrated = torch.from_numpy(vec_integrate_(Y.reshape([n, dy]), X, h))
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
         K /= torch.exp(log_den)
@@ -614,3 +627,69 @@ class ZhengKLTest(CGofTest):
         neg_idx = (Y<0) & (Y>-1./h)
         K[neg_idx] = 2.*torch.exp(-2*(Y[neg_idx]+1./h)) / weight
         return torch.prod(K, dim=-1)
+
+
+class MMDTest(CGofTest):
+    """
+    A MMD test for a goodness-of-fit test for conditional density models. 
+
+    Args: 
+        p: an instance of UnnormalizedCondDensity
+        k: a kernel.Kernel object representing a kernel on X
+        l: a kernel.KCSTKernel object representing a kernel on Y
+        alpha (float): significance level 
+    """
+
+    def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
+        logging.warning(('This test does not accept Pytorch '
+                         'kernels starting with prefix PT'))
+        super(MMDTest, self).__init__(p, alpha)
+        self.p = p
+        self.k = k
+        self.l = l
+        self.ds_p = self.p.get_condsource()
+        self.alpha = alpha
+        self.seed = seed
+        self.n_permute = n_permute
+        kprod = ker.KTwoProduct(k, l, p.dx(), p.dy())
+        self.mmdtest = tst.QuadMMDTest(kprod, n_permute, alpha=alpha)
+
+    def compute_stat(self, X, Y, num_sample=None):
+        """
+        X: Torch tensor of size n x dx
+        Y: Torch tensor of size n x dy
+        
+        Return a test statistic
+        """
+        seed = self.seed
+        ds_p = self.ds_p
+        mmdtest = self.mmdtest
+
+        # Draw sample from p
+        Y_ = ds_p.cond_pair_sample(X, seed=seed+13)
+        real_data = torch.cat([X, Y], dim=1).numpy()
+        model_data = torch.cat([X, Y_], dim=1).numpy()
+        # Make a two-sample test data
+        tst_data = fdata.TSTData(real_data, model_data)
+        stat = mmdtest.compute_stat(tst_data)
+        return stat
+
+    def perform_test(self, X, Y):
+        ds_p = self.ds_p
+        mmdtest = self.mmdtest
+        seed = self.seed
+
+        with util.ContextTimer() as t:
+            # Draw sample from p
+            Y_ = ds_p.cond_pair_sample(X, seed=seed+13)
+            real_data = torch.cat([X, Y], dim=1).numpy()
+            model_data = torch.cat([X, Y_], dim=1).numpy()
+ 
+            # Run the two-sample test on p_sample and dat
+            # Make a two-sample test data
+            tst_data = fdata.TSTData(real_data, model_data)
+            # Test 
+            results = mmdtest.perform_test(tst_data)
+
+        results['time_secs'] = t.secs
+        return results
