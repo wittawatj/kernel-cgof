@@ -329,7 +329,9 @@ method_funcs = [
     met_gkssd_med,
     # met_zhengkl,
     met_gfscd_J1_rand,
+    met_gfscd_J5_rand,
     met_gfscd_J1_opt_tr50,
+    met_gfscd_J5_opt_tr50,
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current
