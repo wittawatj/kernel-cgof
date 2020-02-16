@@ -637,7 +637,10 @@ class MMDTest(CGofTest):
         p: an instance of UnnormalizedCondDensity
         k: a kernel.Kernel object representing a kernel on X
         l: a kernel.KCSTKernel object representing a kernel on Y
+        n_permute: number of times to permute the samples to simulate from the 
+            null distribution (permutation test)
         alpha (float): significance level 
+        seed: random seed
     """
 
     def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
@@ -654,7 +657,7 @@ class MMDTest(CGofTest):
         kprod = ker.KTwoProduct(k, l, p.dx(), p.dy())
         self.mmdtest = tst.QuadMMDTest(kprod, n_permute, alpha=alpha)
 
-    def compute_stat(self, X, Y, num_sample=None):
+    def compute_stat(self, X, Y):
         """
         X: Torch tensor of size n x dx
         Y: Torch tensor of size n x dy
