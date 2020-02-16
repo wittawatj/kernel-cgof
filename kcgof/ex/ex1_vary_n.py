@@ -94,6 +94,66 @@ def met_gkssd_med(p, rx, cond_source, n, r):
     return { 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
+    """
+    KSSD test with Gaussian kernels (for both kernels). 
+    Optimize the kernel bandwidths by maximizing the power criterin of the
+    KSSD test.
+    med = Use median heuristic to choose the bandwidths for both kernels.
+    Compute the median heuristic on the data X and Y separate to get the two
+    bandwidths.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=1000)
+        sigy = util.pt_meddistance(Y, subsample=1000)
+
+        # kernels
+        # k = kernel on X
+        k = ker.PTKGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = ker.PTKGauss(sigma2=sigy**2)
+
+        # split the data 
+        cd = cdat.CondData(X, Y)
+        tr, te = cd.split_tr_te(tr_proportion=tr_proportion)
+
+        # training data
+        Xtr, Ytr = tr.xy()
+        # abs_min, abs_max = torch.min(Xtr).item(), torch.max(Xtr).item()
+        # abs_stdx = torch.std(Xtr).item()
+        # abs_stdy = torch.std(Ytr).item()
+
+        Ytr.requires_grad = False
+        kssd_pc = cgof.KSSDPowerCriterion(p, k, l, Xtr, Ytr)
+
+        max_iter = 200
+        # learning rate 
+        lr = 1e-3
+        # regularization in the power criterion
+        reg = 1e-3
+
+        # constraint satisfaction function
+        def con_f(params):
+            ksigma2 = params[0]
+            lsigma2 = params[1]
+            ksigma2.data.clamp_(min=1e-2, max=10*sigx**2)
+            lsigma2.data.clamp_(min=1e-2, max=10*sigy**2)
+        
+        kssd_pc.optimize_params(
+            [k.sigma2, l.sigma2], constraint_f=con_f,
+            lr=lr, reg=reg, max_iter=max_iter)
+
+        # Construct a KSSD test object
+        kssdtest = cgof.KSSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
+        Xte, Yte = te.xy()
+        # test on the test set
+        result = kssdtest.perform_test(Xte, Yte)
+
+    return { 'test': kssdtest,
+        'test_result': result, 'time_secs': t.secs}
 def met_gfscd_J5_rand(p, rx, cond_source, n, r):
     return met_gfscd_J1_rand(p, rx, cond_source, n, r, J=5)
 
@@ -189,7 +249,8 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
 
         # Now that k, l, and V are optimized. Construct a FSCD test object
         fscdtest = cgof.FSCDTest(p, k, l, V, alpha=alpha, n_bootstrap=400, seed=r+8)
-        result = fscdtest.perform_test(X, Y)
+        Xte, Yte = te.xy()
+        result = fscdtest.perform_test(Xte, Yte)
 
     return { 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
@@ -305,6 +366,7 @@ class Ex1Job(IndependentJob):
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
+from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
@@ -327,11 +389,13 @@ reps = 100
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
+    met_gkssd_opt_tr50,
     # met_zhengkl,
     met_gfscd_J1_rand,
     met_gfscd_J5_rand,
     met_gfscd_J1_opt_tr50,
     met_gfscd_J5_opt_tr50,
+
    ]
 
 # If is_rerun==False, do not rerun the experiment if a result file for the current

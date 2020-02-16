@@ -73,8 +73,8 @@ class CondData(object):
         if nx != ny:
             raise ValueError('Require nx = ny')
         Itr, Ite = util.tr_te_indices(nx, tr_proportion, seed)
-        tr_data = CondData(X[Itr], Y[Itr])
-        te_data = CondData(X[Ite], Y[Ite])
+        tr_data = CondData(X[Itr].detach(), Y[Itr].detach())
+        te_data = CondData(X[Ite].detach(), Y[Ite].detach())
         return (tr_data, te_data)
 
     # def subsample(self, n, seed=87):

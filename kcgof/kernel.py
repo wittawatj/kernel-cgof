@@ -136,6 +136,7 @@ class PTKGauss(KCSTKernel,
         sigma2: a number representing the squared bandwidth
         """
         assert sigma2 > 0, 'sigma2 must be > 0. Was %s'%str(sigma2)
+        # need to be a tensor to make it tunable with a torch optimizer
         self.sigma2 = torch.tensor([1.0])*sigma2
         # _tunable_params = self.sigma2
 

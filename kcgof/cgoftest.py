@@ -182,6 +182,97 @@ class KSSDTest(CGofTest):
         else:
             return stat
 
+class KSSDPowerCriterion(object):
+    """
+    Implement the power criterion of the KSSD test for parameter tuning of the test.
+    Related: see also FSCDPowerCriterion.
+    """
+    def __init__(self, p, k, l, X, Y):
+        """
+        p: an instance of UnnormalizedCondDensity
+        k: a kernel.Kernel object representing a kernel on X
+        l: a kernel.KCSTKernel object representing a kernel on Y
+        X, Y: torch tensors representing the data for X and Y
+        """
+        self.p = p
+        self.k = k
+        self.l = l
+        self.X = X
+        self.Y = Y
+        self.kssdtest = KSSDTest(p, k, l)
+    
+    def optimize_params(self, params, lr, constraint_f=None, reg=1e-4,
+        max_iter=500):
+        """
+        Optimize parameters in the list params by maximizing the power
+        criterion of the KSSD test. This method modifies the state of this
+        object (specifically, parameters in k, l).
+
+        - params:  a list of torch.Tensor s or dict s.
+        Specifies what Tensors should be optimized. Will be fed to an
+        optimizer in torch.optim. All parameters in params must be part of
+        (p, k, l). 
+
+        - constraint_f: callable object (params) |-> None that modifies
+        all the parameters to be optimized in-place to satisfy the
+        constraints (if any).
+
+        - reg: regularizer of the power criterion
+
+        - lr: overall learning rate. Lr of each parameter can be specified
+        separately as well. https://pytorch.org/docs/stable/optim.html
+
+        - max_iter: maximum number of gradient updates
+
+        Return a torch array of recorded function values
+        """
+        if params is None:
+            params = []
+        if constraint_f is None:
+            constraint_f = lambda *args, **kwargs: None
+        # optimizer
+        all_params = params
+        for pa in all_params:
+            pa.requires_grad = True
+        optimizer = optim.Adam(all_params, lr=lr)
+
+        # record
+        objs = torch.zeros(max_iter)
+        for t in range(max_iter):
+            optimizer.zero_grad()
+            # minimize the *negative* of power criterion
+            obj = -self._point_power_criterion(reg=reg)
+            obj.backward()
+            optimizer.step()
+            # constraint satisfaction
+            constraint_f(params)
+            # Flip the sign back
+            objs[t] = -obj.detach()
+        return objs
+
+    def _point_power_criterion(self, reg=1e-5):
+        """
+        Evaluate the regularized power criterion of KSSD test using the
+        specified kernels and data.
+        The objective is mean_under_H1 / (reg + standard deviation under H1)
+
+        reg: a non-negative scalar specifying the regularization parameter
+        """
+        kssdtest = self.kssdtest
+        k = self.k
+
+        h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+        n = h.shape[0]
+        K = k.eval(self.X, self.X)
+        # standard deviation under H1.
+        hK = h*K
+        sigma_h1 = 2.0*torch.std(torch.mean(hK, 1))
+
+        # compute biased KSSD 
+        kssd_biased = torch.mean(hK)
+        power_cri = kssd_biased/(sigma_h1 + reg)
+        return power_cri
+
 class FSCDPowerCriterion(object):
     """
     Construct a callable power criterion and witness functions associated
