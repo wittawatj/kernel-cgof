@@ -28,6 +28,8 @@ import sys
 import scipy
 import scipy.stats as stats
 import torch
+import torch.distributions as dists
+
 
 """
 All the method functions (starting with met_) return a dictionary with the
@@ -426,13 +428,26 @@ def get_ns_model_source(prob_label):
             cden.CDGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             # rx
             cden.RXIsotropicGaussian(dx=5),
-            # CondSource for r]
+            # CondSource for r
             cdat.CSGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
-            ),
+        ),
 
-        # 'gmm_blobs_d2_dfac4': 
-        #     # list of sample sizes
-        #     ([300, 600, 900, 1200, 1500], ) + make_gmm_blobs_d2(distance_factor=4.0),
+        # H1 case. dx=dy=1. T(5) noise. Gaussian ordinary LS.
+        #
+        # Or r(y|x) = t(5) noise + mx + c, m = c =1
+        # p(y|x) =  Gaussian pdf[y - (mx + c), same m and c 
+        # r(x) can be any, N(0,1)? 
+        'gauss_t_d1': (
+            [100, 300, 500, 700],
+            # p 
+            cden.CDGaussianOLS(slope=torch.ones(1), c=torch.ones(1), variance=1.0),
+            # rx
+            cden.RXIsotropicGaussian(dx=1),
+            # CondSource for r
+            cdat.CSAdditiveNoiseRegression(
+                f=lambda X: 1.0+X, 
+                noise=dists.StudentT(df=5), dx=1)
+        ),
 
         } # end of prob2tuples
     if prob_label not in prob2tuples:
