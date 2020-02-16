@@ -3,6 +3,7 @@
 __author__ = 'wittawat'
 
 import dill
+import pickle
 import kcgof
 import kcgof.log as log
 import kcgof.glo as glo
@@ -431,6 +432,28 @@ def get_ns_model_source(prob_label):
             cden.RXIsotropicGaussian(dx=5),
             # CondSource for r
             cdat.CSGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
+        ),
+
+        # H1 case
+        # r(y|x) = same model with a slightly different m (slope).
+        # p(y|x) = Gaussian pdf[y - mx - q*x^2 - c]. Least squares with Gaussian noise.
+        # r(x) = Gaussian N(0,1)? 
+        'quad_quad_d1': (
+            [100, 300, 500],
+            # p
+            cden.CDAdditiveNoiseRegression(
+                f=lambda X: 1.5*X + X**2 + 1.0,
+                noise=dists.Normal(0, 1),
+                dx=1
+            ),
+            # rx (prior on x)
+            cden.RXIsotropicGaussian(dx=1),
+            #Condsource for r
+            cdat.CSAdditiveNoiseRegression(
+                f=lambda X: 2.0*X + X**2 + 1.0,
+                noise=dists.Normal(0, 1),
+                dx=1
+            )
         ),
 
         # H1 case. dx=dy=1. T(5) noise. Gaussian ordinary LS.

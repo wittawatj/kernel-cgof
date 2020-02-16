@@ -5,7 +5,8 @@ __author__ = 'wittawat'
 import kcgof
 import kcgof.log as log
 import os
-import pickle
+import dill
+# import pickle
 
 def get_root():
     """Return the full path to the root of the package"""
@@ -101,7 +102,7 @@ def ex_save_result(ex, result, *relative_path):
     # 
     with open(fpath, 'wb') as f:
         # expect result to be a dictionary
-        pickle.dump(result, f)
+        dill.dump(result, f)
 
 def ex_load_result(ex, *relative_path):
     """Load a result identified by the  path from the experiment ex"""
@@ -120,6 +121,6 @@ def pickle_load(fpath):
 
     with open(fpath, 'rb') as f:
         # expect a dictionary
-        result = pickle.load(f)
+        result = dill.load(f)
     return result
 
