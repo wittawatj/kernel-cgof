@@ -7,6 +7,7 @@ import torch
 import kgof
 import kgof.kernel as gofker
 
+
 class Kernel(object):
     """Abstract class for kernels. 
     Inputs to all methods are torch arrays."""
@@ -29,6 +30,7 @@ class Kernel(object):
         """
         raise NotImplementedError()
 
+
 class KCSTKernel(gofker.KSTKernel, Kernel):
     """
     Interface for specifying a Kernel for a Conditional Stein Test (KCST).
@@ -37,6 +39,7 @@ class KCSTKernel(gofker.KSTKernel, Kernel):
     """
     __metaclass__ = ABCMeta
     pass
+
 
 class HasTunableParams(object):
     """
@@ -86,6 +89,7 @@ class PTKTestLocations(Kernel):
     locations. This kernel is used in The Finite Set Conditional Discrepancy
     (FSCD). {v_i}_i have to be in the domain that k can accept.
     """
+
     def __init__(self, k: Kernel, V: torch.tensor):
         """
         k: a base kernel of type Kernel
@@ -231,4 +235,56 @@ class PTKGauss(KCSTKernel,
         G = K/sigma2 *(d - D2/sigma2)
         return G
 
+    def numpy(self):
+        """
+        Return an instance of numpy implementation of itself. 
+        """
+        sigma2 = self.sigma2.item()
+
+        return gofker.KGauss(sigma2)
+
 # end PTKGauss
+
+
+class KTwoProduct(gofker.Kernel):
+    """
+    The product of two kernels defined over the tuple of Eucleadean spaces of 
+    respective dimensions d1 and d2.
+
+    Args: 
+        k1: kgof.Kernel object. 
+        k2: kgof.Kernel object. 
+        d1: dimensionality of the input of the first kernel 
+        d2: dimensionality of the input of the second kernel
+    """
+
+    def __init__(self, k1, k2, d1, d2):
+        self.k1 = k1
+        self.k2 = k2
+        self.d1 = d1
+        self.d2 = d2
+
+    def eval(self, X, Y):
+        """
+        Evaluate the kernel on data X and Y
+        X: numpy array of size n x (d1+d2) 
+        Y: numpy array of size n x (d1+d2)
+        Return:  
+        """
+        d1 = self.d1
+        K1 = self.k1.eval(X[:, :d1], Y[:, :d1])
+        K2 = self.k2.eval(X[:, d1:], Y[:, d1:])
+        return K1 * K2
+
+    def pair_eval(self, X, Y):
+        """
+        Evaluate k(x1, y1), k(x2, y2), ...
+
+        X: numpy array of size n x (d1+d2)
+        Y: numpy array of size n x (d1+d2)
+        Return: 1d numpy array of length n
+        """
+        d1 = self.d1
+        K1 = self.k1.pair_eval(X[:, :d1], Y[:, :d1])
+        K2 = self.k2.pair_eval(X[:, d1:], Y[:, d1:])
+        return K1 * K2
