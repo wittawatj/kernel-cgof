@@ -95,7 +95,10 @@ def fit_gaussian_sample(X, J, seed=29):
         mean_x = np.mean(X, 0)
         cov_x = np.cov(X.T)
         if d==1:
-            cov_x = np.array([[cov_x]])
-        V = np.random.multivariate_normal(mean_x, cov_x, J)
+            # cov_x = np.array([[cov_x]])
+            V = np.random.randn(J, 1)*cov_x**0.5 + mean_x
+            return V
+        else:
+            V = np.random.multivariate_normal(mean_x, cov_x, J)
     return V
 

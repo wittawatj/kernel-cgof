@@ -210,7 +210,8 @@ class CDGaussianHetero(UnnormalizedCondDensity):
         stdnorm = dists.Normal(0, 1)
         log_prob = stdnorm.log_prob((Y - fX)/fStd) - torch.log(fStd)
         assert log_prob.shape[0] == X.shape[0]
-        return log_prob
+        assert len(log_prob.reshape(-1)) == n
+        return log_prob.reshape(-1)
 
     def get_condsource(self):
         return cdat.CSGaussianHetero(self.f, self.f_variance, self.dx())
@@ -254,9 +255,10 @@ class CDAdditiveNoiseRegression(UnnormalizedCondDensity):
         noise_dist = self.noise
         # compute the mean f(x)
         fX = f(X)
-        log_prob = noise_dist.log_prob(Y - fX)
+        log_prob = noise_dist.log_prob(Y - fX.reshape(-1, 1))
         assert log_prob.shape[0] == X.shape[0]
-        return log_prob
+        assert X.shape[0] == len(log_prob.reshape(-1))
+        return log_prob.reshape(-1)
 
     def get_condsource(self):
         return cdat.CSAdditiveNoiseRegression(self.f, self.noise, self.dx())

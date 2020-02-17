@@ -16,13 +16,13 @@ def get_func_tuples():
     """
     func_tuples = [
         ('met_gkssd_med', 'KSSD-med', 'r--^'),
-        ('met_gkssd_opt_tr30', 'KSSD-opt 30%', 'r-2'),
-        ('met_gkssd_opt_tr50', 'KSSD-opt', 'r-^'),
+        ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),
+        ('met_gkssd_opt_tr50', 'KSSD-opt 50tr', 'r-^'),
         ('met_gfscd_J1_rand', 'FSCD-rand J1', 'b--*'),
         ('met_gfscd_J5_rand', 'FSCD-rand J5', 'b--h'),
-        ('met_gfscd_J1_opt_tr50', 'FSCD-opt J1', 'b-o'),
-        ('met_gfscd_J5_opt_tr30', 'FSCD-opt J5 30%', 'b-3'),
-        ('met_gfscd_J5_opt_tr50', 'FSCD-opt J5', 'b-s'),
+        ('met_gfscd_J1_opt_tr50', 'FSCD-opt J1 50tr', 'b-o'),
+        ('met_gfscd_J5_opt_tr30', 'FSCD-opt J5 30tr', 'b-3'),
+        ('met_gfscd_J5_opt_tr50', 'FSCD-opt J5 50tr', 'b-s'),
         ('met_zhengkl', 'Zheng', 'm-x'),
         # ('met_gumeJ5_3sopt_tr20', 'Rel-UME J5', 'r-^'),
         # ('met_gfssdJ1_3sopt_tr20', 'Rel-FSSD J1', 'C4--'),

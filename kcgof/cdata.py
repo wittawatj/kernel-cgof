@@ -25,11 +25,13 @@ class CondData(object):
         :param X: n x dx Pytorch tensor for dataset X
         :param Y: n x dy Pytorch tensor for dataset Y
         """
-        self.X = X
-        self.Y = Y
+        self.X = X.detach()
+        self.Y = Y.detach()
+        self.X.requires_grad = False
+        self.Y.requires_grad = False
 
-        nx, dx = X.shape
-        ny, dy = Y.shape
+        nx, dx = self.X.shape
+        ny, dy = self.Y.shape
         if nx != ny:
             raise ValueError('Sample size of the paired sample must be the same.')
 
@@ -195,7 +197,9 @@ class CSAdditiveNoiseRegression(CondSource):
         f = self.f
         fX = f(X)
         with util.TorchSeedContext(seed=seed):
-            Y = noise_dist.sample((n, 1)) + fX
+            Y = noise_dist.sample((n, 1)) + fX.reshape(n, 1)
+        assert Y.shape[0] == X.shape[0]
+        assert Y.shape[1] == X.shape[1]
         return Y
 
     def dx(self):

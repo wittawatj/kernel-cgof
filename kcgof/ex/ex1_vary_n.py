@@ -24,11 +24,10 @@ from independent_jobs.engines.SerialComputationEngine import SerialComputationEn
 from independent_jobs.engines.SlurmComputationEngine import SlurmComputationEngine
 from independent_jobs.tools.Log import logger
 import numpy as np
-import math
 import os
 import sys 
-import scipy
-import scipy.stats as stats
+# import scipy
+# import scipy.stats as stats
 import torch
 import torch.distributions as dists
 
@@ -64,8 +63,13 @@ def sample_xy(rx, cond_source, n, rep):
     cs = cond_source
     r = rep
     with util.TorchSeedContext(seed=r):
-        X = rx(n)
-    Y = cs(X, seed=r+100)
+        X = rx(n).detach()
+    # might be important to detach from the graph just in case there is some
+    # unexpected gradient flow
+    Y = cs(X, seed=r+100).detach()
+
+    X.requires_grad = False
+    Y.requires_grad = False
     return (X, Y)
 
 
@@ -82,8 +86,8 @@ def met_gkssd_med(p, rx, cond_source, n, r):
     # start timing
     with util.ContextTimer() as t:
         # median heuristic
-        sigx = util.pt_meddistance(X, subsample=1000)
-        sigy = util.pt_meddistance(Y, subsample=1000)
+        sigx = util.pt_meddistance(X, subsample=600, seed=r+3)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=r+38)
 
         # kernels
         # k = kernel on X
@@ -114,8 +118,8 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
     # start timing
     with util.ContextTimer() as t:
         # median heuristic
-        sigx = util.pt_meddistance(X, subsample=1000)
-        sigy = util.pt_meddistance(Y, subsample=1000)
+        sigx = util.pt_meddistance(X, subsample=600, seed=r+7)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=r+99)
 
         # kernels
         # k = kernel on X
@@ -133,7 +137,6 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
         # abs_stdx = torch.std(Xtr).item()
         # abs_stdy = torch.std(Ytr).item()
 
-        Ytr.requires_grad = False
         kssd_pc = cgof.KSSDPowerCriterion(p, k, l, Xtr, Ytr)
 
         max_iter = 100
@@ -180,12 +183,12 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
         tr, te = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5)
         Xtr, Ytr = tr.xy()
         # fit a Gaussian and draw J locations
-        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+55)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+75)
         V = torch.tensor(npV, dtype=torch.float)
 
         # median heuristic
-        sigx = util.pt_meddistance(X, subsample=1000)
-        sigy = util.pt_meddistance(Y, subsample=1000)
+        sigx = util.pt_meddistance(X, subsample=600, seed=2+r)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=93+r)
 
         # kernels
         # k = kernel on X
@@ -226,13 +229,13 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         Xtr, Ytr = tr.xy()
 
         # fit a Gaussian and draw J locations as an initial point for V
-        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+55)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+550)
 
         V = torch.tensor(npV, dtype=torch.float)
 
         # median heuristic
-        sigx = util.pt_meddistance(X, subsample=1000)
-        sigy = util.pt_meddistance(Y, subsample=1000)
+        sigx = util.pt_meddistance(X, subsample=600, seed=30+r)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=40+r)
 
         # kernels
         # k = kernel on X
@@ -403,19 +406,20 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 70
+reps = 40
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
-    met_gkssd_opt_tr30,
-    met_gkssd_opt_tr50,
+    met_gfscd_J5_rand,
+    met_gfscd_J5_opt_tr30,
+
+    # met_gkssd_opt_tr30,
+    # met_gkssd_opt_tr50,
     # met_zhengkl,
     # met_gfscd_J1_rand,
-    met_gfscd_J5_rand,
     # met_gfscd_J1_opt_tr50,
-    met_gfscd_J5_opt_tr30,
-    met_gfscd_J5_opt_tr50,
+    # met_gfscd_J5_opt_tr50,
 
    ]
 
@@ -496,7 +500,7 @@ def get_ns_model_source(prob_label):
         # p(y|x) =  Gaussian pdf[y - (mx + c), m=1.  and c=1
         # r(x) = U[-3,3] (linearity breaks down from approximately |X| > 2) 
         'quad_vs_lin_d1': (
-            [100, 300, 500 ],
+            [100, 300, 500],
             # p(y|x)
             cden.CDGaussianOLS(slope=torch.tensor([1.0]), c=torch.tensor([1.0]), variance=1.0),
             # rx
@@ -507,12 +511,30 @@ def get_ns_model_source(prob_label):
                 noise=dists.Normal(0, 1.0),
                 dx=1
             )
-
-
         ),
-
-
         } # end of prob2tuples
+
+    # add more problems to prob2tuples
+    g_het_dx5_center = 2.0*torch.ones(1,5)
+    g_het_dx5_spike_var = 3.0
+    prob2tuples['g_het_dx5'] = (
+        [100, 300, 500],
+        # p(y|x)
+        cden.CDAdditiveNoiseRegression(
+            f=lambda X: X.sum(dim=1) - 1.0,
+            noise=dists.Normal(0, 1.0), dx=5
+        ),
+        # rx
+        cden.RXIsotropicGaussian(dx=5),
+        # r(y|x)
+        cdat.CSGaussianHetero(
+            f=lambda X: X.sum(dim=1) - 1.0,
+            # f_variance = lambda X: torch.ones(X.shape[0]),
+            f_variance= lambda X: 1.0 + g_het_dx5_spike_var*torch.exp( -torch.sum( (X -
+                g_het_dx5_center)**2, dim=1 )/0.2**2 ),
+            dx=5
+        ),
+    )
     if prob_label not in prob2tuples:
         raise ValueError('Unknown problem label. Need to be one of %s'%str(list(prob2tuples.keys()) ))
     return prob2tuples[prob_label]
