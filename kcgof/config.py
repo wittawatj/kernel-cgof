@@ -21,6 +21,9 @@ _default_config = {
     # experiments.     
     'ex_scratch_path': '/is/ei/wittawat/tmp/kcgof',
 
+    # True or False. If False, just use for loop.
+    'ex_use_slurm_cluster': False,
+
     # Slurm partitions.
     # When using SlurmComputationEngine for running the experiments, the partitions (groups of computing nodes)
     # can be specified here. Set to None to not set to any value (i.e., use the default partition).

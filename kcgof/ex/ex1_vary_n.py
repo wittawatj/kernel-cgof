@@ -99,7 +99,8 @@ def met_gkssd_med(p, rx, cond_source, n, r):
         kssdtest = cgof.KSSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
         result = kssdtest.perform_test(X, Y)
 
-    return { 'test': kssdtest,
+    return { 
+        # 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_gkssd_opt_tr30(p, rx, cond_source, n, r):
@@ -162,7 +163,8 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
         # test on the test set
         result = kssdtest.perform_test(Xte, Yte)
 
-    return { 'test': kssdtest,
+    return { 
+        # 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_gfscd_J5_rand(p, rx, cond_source, n, r):
@@ -183,7 +185,7 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
         tr, te = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5)
         Xtr, Ytr = tr.xy()
         # fit a Gaussian and draw J locations
-        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+75)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+750)
         V = torch.tensor(npV, dtype=torch.float)
 
         # median heuristic
@@ -201,7 +203,8 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
         # test on the full samples
         result = fscdtest.perform_test(X, Y)
 
-    return { 'test': fscdtest,
+    return { 
+        # 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_gfscd_J1_opt_tr30(p, rx, cond_source, n, r):
@@ -232,7 +235,7 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         Xtr, Ytr = tr.xy()
 
         # fit a Gaussian and draw J locations as an initial point for V
-        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+550)
+        npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+75)
 
         V = torch.tensor(npV, dtype=torch.float)
 
@@ -251,11 +254,11 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
 
         # parameter tuning
         fscd_pc = cgof.FSCDPowerCriterion(p, k, l, Xtr, Ytr)
-        max_iter = 100
+        max_iter = 200
         # learning rate
         lr = 1e-2
         # regularization parameter when forming the power criterion
-        reg = 1e-3
+        reg = 1e-4
 
         # constraint satisfaction function
         def con_f(params, V):
@@ -275,7 +278,8 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         # test only on the test samples
         result = fscdtest.perform_test(Xte, Yte)
 
-    return { 'test': fscdtest,
+    return { 
+        # 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_zhengkl(p, rx, cond_source, n, r):
@@ -293,7 +297,8 @@ def met_zhengkl(p, rx, cond_source, n, r):
         zheng_test = cgof.ZhengKLTest(p, alpha)
         result = zheng_test.perform_test(X, Y)
 
-    return { 'test': zheng_test,
+    return { 
+        # 'test': zheng_test,
         'test_result': result, 'time_secs': t.secs}
 
 # def met_gmmd_med(P, Q, data_source, n, r):
@@ -338,17 +343,13 @@ def met_zhengkl(p, rx, cond_source, n, r):
 # Define our custom Job, which inherits from base class IndependentJob
 class Ex1Job(IndependentJob):
    
-    def __init__(self, aggregator, p, rx, cond_source, prob_label, rep, met_func, n):
+    def __init__(self, aggregator, prob_label, rep, met_func, n):
         #walltime = 60*59*24 
         walltime = 60*59
         memory = int(n*1e-2) + 50
 
         IndependentJob.__init__(self, aggregator, walltime=walltime,
                                memory=memory)
-                               
-        self.p = p
-        self.rx = rx
-        self.cond_source = cond_source
         self.prob_label = prob_label
         self.rep = rep
         self.met_func = met_func
@@ -357,10 +358,8 @@ class Ex1Job(IndependentJob):
     # we need to define the abstract compute method. It has to return an instance
     # of JobResult base class
     def compute(self):
-
-        p = self.p
-        rx = self.rx
-        cs = self.cond_source 
+        # from prob_label, get p, rx, cs, n
+        ns, p, rx, cs = get_ns_model_source(self.prob_label)
         r = self.rep
         n = self.n
         met_func = self.met_func
@@ -410,7 +409,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 50
+reps = 100
 
 # tests to try
 method_funcs = [ 
@@ -434,19 +433,19 @@ is_rerun = False
 #---------------------------
 
 def create_prob_g_het(dx):
-    g_het_dx5_center = 1.0*torch.ones(1,dx)
+    g_het_dx5_center = 1.5*torch.ones(1,dx)
     g_het_dx5_spike_var = 10.0
     # ball_width = 0.3
     # ns
     return (
-    [500, 1000, 1500],
+    [300, 900, 1500],
     # p(y|x)
     cden.CDGaussianHetero(
         f=lambda X: X.sum(dim=1) - 1.0,
         # make a sharp 2-norm ball
         # f_variance= lambda X: 1.0 + g_het_dx5_spike_var*( torch.sum( (X-g_het_dx5_center)**2, dim=1)**0.5 <= ball_width),
         f_variance= lambda X: 1.0 + g_het_dx5_spike_var*torch.exp( -0.5*torch.sum( (X -
-            g_het_dx5_center)**2, dim=1 )/0.5**2 ),
+            g_het_dx5_center)**2, dim=1 )/0.8**2 ),
         dx=dx
     ),
     # rx
@@ -545,6 +544,8 @@ def get_ns_model_source(prob_label):
         } # end of prob2tuples
 
     # add more problems to prob2tuples
+    prob2tuples['g_het_dx3'] = create_prob_g_het(dx=3)
+    prob2tuples['g_het_dx4'] = create_prob_g_het(dx=4)
     prob2tuples['g_het_dx5'] = create_prob_g_het(dx=5)
     prob2tuples['g_het_dx10'] = create_prob_g_het(dx=10)
 
@@ -553,7 +554,7 @@ def get_ns_model_source(prob_label):
     return prob2tuples[prob_label]
 
 
-def run_problem(prob_label, use_cluster=False):
+def run_problem(prob_label):
     """Run the experiment"""
     # ///////  submit jobs //////////
     # create folder name string
@@ -569,6 +570,7 @@ def run_problem(prob_label, use_cluster=False):
     batch_parameters = BatchClusterParameters(
         foldername=foldername, job_name_base="e%d_"%ex, parameter_prefix="")
 
+    use_cluster = glo._get_key_from_default_config('ex_use_slurm_cluster')
     if use_cluster:
         # use a Slurm cluster
         partitions = config['ex_slurm_partitions']
@@ -603,8 +605,7 @@ def run_problem(prob_label, use_cluster=False):
                     aggregators[r, ni, mi] = sra
                 else:
                     # result not exists or rerun
-                    job = Ex1Job(SingleResultAggregator(), p, rx, cs,
-                        prob_label, r, f, n)
+                    job = Ex1Job(SingleResultAggregator(), prob_label, r, f, n)
 
                     agg = engine.submit_job(job)
                     aggregators[r, ni, mi] = agg
