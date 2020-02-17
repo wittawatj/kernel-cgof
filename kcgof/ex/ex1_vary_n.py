@@ -204,6 +204,9 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     return { 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_gfscd_J1_opt_tr30(p, rx, cond_source, n, r):
+    return met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.3)
+
 def met_gfscd_J5_opt_tr30(p, rx, cond_source, n, r):
     return met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=5, tr_proportion=0.3)
 
@@ -391,6 +394,7 @@ from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
+from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr30
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_opt_tr30
@@ -406,18 +410,19 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 40
+reps = 50
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
-    met_gfscd_J5_rand,
-    met_gfscd_J5_opt_tr30,
+    # met_gfscd_J5_rand,
+    # met_gfscd_J5_opt_tr30,
+    met_gfscd_J1_opt_tr30,
 
     # met_gkssd_opt_tr30,
     # met_gkssd_opt_tr50,
     # met_zhengkl,
-    # met_gfscd_J1_rand,
+    met_gfscd_J1_rand,
     # met_gfscd_J1_opt_tr50,
     # met_gfscd_J5_opt_tr50,
 
@@ -427,6 +432,31 @@ method_funcs = [
 # setting already exists.
 is_rerun = False
 #---------------------------
+
+def create_prob_g_het(dx):
+    g_het_dx5_center = 1.0*torch.ones(1,dx)
+    g_het_dx5_spike_var = 10.0
+    # ball_width = 0.3
+    # ns
+    return (
+    [500, 1000, 1500],
+    # p(y|x)
+    cden.CDGaussianHetero(
+        f=lambda X: X.sum(dim=1) - 1.0,
+        # make a sharp 2-norm ball
+        # f_variance= lambda X: 1.0 + g_het_dx5_spike_var*( torch.sum( (X-g_het_dx5_center)**2, dim=1)**0.5 <= ball_width),
+        f_variance= lambda X: 1.0 + g_het_dx5_spike_var*torch.exp( -0.5*torch.sum( (X -
+            g_het_dx5_center)**2, dim=1 )/0.5**2 ),
+        dx=dx
+    ),
+    # rx
+    cden.RXIsotropicGaussian(dx=dx),
+    # r(y|x)
+    cdat.CSAdditiveNoiseRegression(
+        f=lambda X: X.sum(dim=1) - 1.0,
+        noise=dists.Normal(0, 1.0), dx=dx
+    ),
+    )
 
 def get_ns_model_source(prob_label):
     """
@@ -515,26 +545,9 @@ def get_ns_model_source(prob_label):
         } # end of prob2tuples
 
     # add more problems to prob2tuples
-    g_het_dx5_center = 2.0*torch.ones(1,5)
-    g_het_dx5_spike_var = 3.0
-    prob2tuples['g_het_dx5'] = (
-        [100, 300, 500],
-        # p(y|x)
-        cden.CDAdditiveNoiseRegression(
-            f=lambda X: X.sum(dim=1) - 1.0,
-            noise=dists.Normal(0, 1.0), dx=5
-        ),
-        # rx
-        cden.RXIsotropicGaussian(dx=5),
-        # r(y|x)
-        cdat.CSGaussianHetero(
-            f=lambda X: X.sum(dim=1) - 1.0,
-            # f_variance = lambda X: torch.ones(X.shape[0]),
-            f_variance= lambda X: 1.0 + g_het_dx5_spike_var*torch.exp( -torch.sum( (X -
-                g_het_dx5_center)**2, dim=1 )/0.2**2 ),
-            dx=5
-        ),
-    )
+    prob2tuples['g_het_dx5'] = create_prob_g_het(dx=5)
+    prob2tuples['g_het_dx10'] = create_prob_g_het(dx=10)
+
     if prob_label not in prob2tuples:
         raise ValueError('Unknown problem label. Need to be one of %s'%str(list(prob2tuples.keys()) ))
     return prob2tuples[prob_label]

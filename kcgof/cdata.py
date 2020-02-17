@@ -8,6 +8,7 @@ from abc import ABCMeta, abstractmethod
 import kcgof
 import kcgof.util as util
 import torch
+import torch.distributions as dists
 
 class CondData(object):
     """
@@ -124,6 +125,72 @@ class CondSource(object):
 
 # end class CondSource
 
+class CSMixtureDensityNetwork(CondSource):
+    """
+    CondSource for cdensity.CSMixtureDensityNetwork
+    """
+    def __init__(self, n_comps, pi, mu, variance, dx, dy):
+        """
+        Let X be an n x dx torch tensor.
+        Let K = n_comps
+
+        :param n_comps: the number of Gaussian components
+        :param pi: a torch callable X |-> n x K
+        :param mu: a torch callable X |-> n x K x dy
+        :param variance: a torch callable X |-> n x K 
+        """
+        self.n_comps = n_comps
+        self.pi = pi
+        self.mu = mu
+        self.variance = variance
+        assert dx > 0
+        self._dx = dx
+        assert dy > 0
+        self._dy = dy
+
+
+    def cond_pair_sample(self, X, seed):
+        raise NotImplementedError()
+
+        if X.shape[1] != self._dx:
+            raise ValueError('Input dimension in X (found {}) does not match dx ({}) as specified by the model.'.format(X.shape[1], self._dx))
+        n = X.shape[0]
+        K = self.n_comps
+        f_pi = self.pi
+        f_mu = self.mu
+        f_variance = self.variance
+
+        # TODO improve the implementation to be faster
+        with util.TorchSeedContext(seed=seed):
+            for i in range(n):
+                Xi = X[[i], :]
+                pii = f_pi(Xi)
+                assert torch.abs(pii.sum() - 1.0) <= 1e-6
+                cat = dists.Categorical(probs=pii)
+                # sample a component
+                ki = cat.sample((1, 1))
+
+                # 1 x K x dy
+                Mui = f_mu(Xi)
+                Muiki = Mui
+
+
+        # # Pi: n x K 
+        # Pi = f_pi(X)
+
+        # # Mu: n x K x dy
+        # Mu = f_mu(X)
+
+        # Var: n x K
+        # Var = f_variance(X)
+        return None
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return self._dy
+
 class CSGaussianHetero(CondSource):
     """
     A CondSource for CDGaussianHetero
@@ -199,7 +266,6 @@ class CSAdditiveNoiseRegression(CondSource):
         with util.TorchSeedContext(seed=seed):
             Y = noise_dist.sample((n, 1)) + fX.reshape(n, 1)
         assert Y.shape[0] == X.shape[0]
-        assert Y.shape[1] == X.shape[1]
         return Y
 
     def dx(self):

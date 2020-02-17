@@ -12,6 +12,7 @@ import kcgof.glo as glo
 import kcgof.cdata as cdat
 import torch
 import torch.distributions as dists
+import math
 #import warnings
 
 def warn_bounded_domain(self):
@@ -172,6 +173,86 @@ class UnnormalizedCondDensity( object):
 
 # end UnnormalizedCondDensity
 
+class CDMixtureDensityNetwork(UnnormalizedCondDensity):
+    """
+    p(y|x) is a mixture density network described in 
+
+    https://publications.aston.ac.uk/373/1/NCRG_94_004.pdf
+    Or the Bishop's book (Section 5.6)
+
+    p(y|x) = \sum_{i=1}^K  \pi(x) N(y | \mu(x), \sigma^2(x))
+    for some functions \pi, mu, sigma^2.
+    """
+    def __init__(self, n_comps, pi, mu, variance, dx, dy):
+        """
+        Let X be an n x dx torch tensor.
+        Let K = n_comps
+
+        :param n_comps: the number of Gaussian components
+        :param pi: a torch callable X |-> n x K
+        :param mu: a torch callable X |-> n x K x dy
+        :param variance: a torch callable X |-> n x K 
+        """
+        self.n_comps = n_comps
+        self.pi = pi
+        self.mu = mu
+        self.variance = variance
+        assert dx > 0
+        self._dx = dx
+        assert dy > 0
+        self._dy = dy
+
+    def log_den(self, X, Y):
+        super().log_den(X, Y)
+        return self.log_normalized_den(X, Y)
+
+    def log_normalized_den(self, X, Y):
+        # Y has to be n x 1
+        super().log_den(X, Y)
+        n, dx = X.shape
+        dy = Y.shape[1]
+        K = self.n_comps
+        f_pi = self.pi
+        f_mu = self.mu
+        f_variance = self.variance
+
+        # Mu: n x K x dy
+        Mu = f_mu(X)
+        assert len(Mu.shape) == 3
+        assert Mu.shape[0] == n 
+        assert Mu.shape[1] == K
+        assert Mu.shape[2] == dy
+
+        # Pi: n x K 
+        Pi = f_pi(X)
+        assert len(Pi.shape) ==2
+        assert Pi.shape[0] == n
+        assert Pi.shape[1] == K
+
+        # Var: n x K
+        Var = f_variance(X)
+        assert len(Var.shape) == 2
+        assert Var.shape[0] == n
+        assert Var.shape[1] == K
+
+        # broadcasting
+        squared = torch.sum((Y - Mu)**2, dim=1)
+        assert squared.shape[0] == n
+        assert squared.shape[1] == K
+        const = 1.0/math.sqrt(2.0*math.pi)
+        # TODO: make the computation robust to numerical errors. Perhaps use
+        # logsumexp trick.
+        E = torch.exp(-0.5*squared/Var) * const * Pi / torch.sqrt(Var)
+        log_prob = torch.log(torch.sum(E, dim=1))
+        return log_prob
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return self._dy
+
+
 class CDGaussianHetero(UnnormalizedCondDensity):
     """
     p(y|x) = f(x) + N(0, \sigma^2(x))
@@ -200,7 +281,7 @@ class CDGaussianHetero(UnnormalizedCondDensity):
 
         # compute the mean f(x)
         fX = f(X)
-        assert fX.shape[1] == 1
+        fX = fX.reshape(-1, 1)
         # compute the variance at each x. Expect same shape as X
         fVar = f_variance(X)
         if fVar.shape[0] != X.shape[0]:
