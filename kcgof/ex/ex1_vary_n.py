@@ -4,6 +4,9 @@ __author__ = 'wittawat'
 
 import dill
 import pickle
+import kgof
+import kgof.kernel
+
 import kcgof
 import kcgof.log as log
 import kcgof.glo as glo
@@ -74,6 +77,35 @@ def sample_xy(rx, cond_source, n, rep):
 
 
 #-------------------------------------------------------
+def met_gmmd_med(p, rx, cond_source, n, r):
+    """
+    A naive baseline which samples from the conditional density model p to
+    create a new joint sample. The test is performed with a two-sample MMD
+    test comparing the two joint samples. Use a Gaussian kernel for both X
+    and Y with median heuristic.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+
+    # start timing
+    with util.ContextTimer() as t:
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=600, seed=r+3)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=r+38)
+
+        # kernels
+        # k = kernel on X. Need a kernel that can operator on numpy arrays
+        k = kgof.kernel.KGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = kgof.kernel.KGauss(sigma2=sigy**2)
+
+        # Construct an MMD test object. Require freqopttest package.
+        mmdtest = cgof.MMDTest(p, k, l, n_permute=400, alpha=alpha, seed=r+37)
+        result = mmdtest.perform_test(X, Y)
+
+    return { 
+        # 'test': kssdtest,
+        'test_result': result, 'time_secs': t.secs}
+
 def met_gkssd_med(p, rx, cond_source, n, r):
     """
     KSSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
@@ -388,6 +420,7 @@ class Ex1Job(IndependentJob):
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
+from kcgof.ex.ex1_vary_n import met_gmmd_med
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
@@ -409,18 +442,19 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 100
+reps = 50
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
-    # met_gfscd_J5_rand,
-    # met_gfscd_J5_opt_tr30,
+    met_gmmd_med,
+    met_gfscd_J5_opt_tr30,
     met_gfscd_J1_opt_tr30,
 
     # met_gkssd_opt_tr30,
     # met_gkssd_opt_tr50,
     # met_zhengkl,
+    met_gfscd_J5_rand,
     met_gfscd_J1_rand,
     # met_gfscd_J1_opt_tr50,
     # met_gfscd_J5_opt_tr50,
@@ -475,13 +509,23 @@ def get_ns_model_source(prob_label):
     prob2tuples = { 
         # A case where H0 is true. Gaussian least squares model.
         'gaussls_h0_d5': (
-            [100, 300, 600, 900],
+            [200, 400, 600, 800],
             # p 
             cden.CDGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             # rx
             cden.RXIsotropicGaussian(dx=5),
             # CondSource for r
             cdat.CSGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
+        ),
+        # simplest case where H0 is true.
+        'gaussls_h0_d1': (
+            [200, 400, 600, 800],
+            # p 
+            cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
+            # rx
+            cden.RXIsotropicGaussian(dx=5),
+            # CondSource for r
+            cdat.CSGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
         ),
 
         # H1 case
@@ -533,7 +577,7 @@ def get_ns_model_source(prob_label):
             # p(y|x)
             cden.CDGaussianOLS(slope=torch.tensor([1.0]), c=torch.tensor([1.0]), variance=1.0),
             # rx
-            lambda n: dists.Uniform(low=-3.0, high=3.0).sample((n, 1)),
+            lambda n: dists.Uniform(low=-2.0, high=2.0).sample((n, 1)),
             # CondSource for r(y|x)
             cdat.CSAdditiveNoiseRegression(
                 f=lambda X: 1.0*X + 0.1*X**2 + 1.0,

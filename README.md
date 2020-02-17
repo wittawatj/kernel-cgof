@@ -26,4 +26,5 @@ The `-e` flag offers an "edit mode", meaning that changes to any files in this r
 
 ## Experiments
 
-Batch experiments require https://github.com/wittawatj/independent-jobs .
+* Batch experiments require https://github.com/wittawatj/independent-jobs .
+* The MMD test requires https://github.com/wittawatj/fotest or 

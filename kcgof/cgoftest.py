@@ -644,8 +644,8 @@ class MMDTest(CGofTest):
     """
 
     def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
-        logging.warning(('This test does not accept Pytorch '
-                         'kernels starting with prefix PT'))
+        # logging.warning(('This test does not accept Pytorch '
+        #                  'kernels starting with prefix PT'))
         super(MMDTest, self).__init__(p, alpha)
         self.p = p
         self.k = k
