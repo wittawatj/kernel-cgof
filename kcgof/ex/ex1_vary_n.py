@@ -442,7 +442,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 50
+reps = 200
 
 # tests to try
 method_funcs = [ 
@@ -472,7 +472,7 @@ def create_prob_g_het(dx):
     # ball_width = 0.3
     # ns
     return (
-    [300, 900, 1500],
+    [300, 700, 1100, 1500],
     # p(y|x)
     cden.CDGaussianHetero(
         f=lambda X: X.sum(dim=1) - 1.0,
@@ -523,11 +523,21 @@ def get_ns_model_source(prob_label):
             # p 
             cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
             # rx
-            cden.RXIsotropicGaussian(dx=5),
+            cden.RXIsotropicGaussian(dx=1),
             # CondSource for r
             cdat.CSGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
         ),
 
+        # an obvious case for Gauss LS problem. H1 true. Very easy
+        'gaussls_h1_d1_easy': (
+            [100, 300, 500],
+            # p 
+            cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
+            # rx
+            cden.RXIsotropicGaussian(dx=1),
+            # CondSource for r
+            cdat.CSGaussianOLS(slope=torch.tensor(2.0), c=-1.0, variance=1.0),
+        ),
         # H1 case
         # r(y|x) = same model with a slightly different m (slope).
         # p(y|x) = Gaussian pdf[y - mx - q*x^2 - c]. Least squares with Gaussian noise.
@@ -573,7 +583,7 @@ def get_ns_model_source(prob_label):
         # p(y|x) =  Gaussian pdf[y - (mx + c), m=1.  and c=1
         # r(x) = U[-3,3] (linearity breaks down from approximately |X| > 2) 
         'quad_vs_lin_d1': (
-            [100, 300, 500],
+            [100, 400, 700, 1000],
             # p(y|x)
             cden.CDGaussianOLS(slope=torch.tensor([1.0]), c=torch.tensor([1.0]), variance=1.0),
             # rx

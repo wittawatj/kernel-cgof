@@ -15,6 +15,7 @@ def get_func_tuples():
         (func_name used in the experiments, label name, plot line style)
     """
     func_tuples = [
+        ('met_gmmd_med', 'MMD-med', 'g-+'),
         ('met_gkssd_med', 'KSSD-med', 'r--^'),
         ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),
         ('met_gkssd_opt_tr50', 'KSSD-opt 50tr', 'r-^'),
@@ -176,6 +177,10 @@ def plot_2d_cond_model(p, px, X, Y, domX, domY, figsize=(10, 6), height_ratios=[
     mdomX, mdomY = torch.meshgrid(domX.view(-1), domY.view(-1))
     flatlogden = p.log_normalized_den(mdomX.reshape(-1, 1), mdomY.reshape(-1, 1))
     flatden = torch.exp(flatlogden)
+    # for the purpose of plotting, if the density is Nan, make it 0
+    flatden[torch.isnan(flatden)] = 0.0
+    # print(flatden)
+    # print(torch.all(torch.abs(flatden) <= 1e-7))
     mden = flatden.view(mdomX.shape)
 
     np_mdomX = mdomX.detach().numpy()

@@ -13,7 +13,7 @@ import kcgof.cdata as cdat
 import torch
 import torch.distributions as dists
 import math
-#import warnings
+import warnings
 
 def warn_bounded_domain(self):
     log.l().warning('{} has a bounded domain. This may have an unintended effect to the test result'.format(self.__class__) )
@@ -191,7 +191,7 @@ class CDMixtureDensityNetwork(UnnormalizedCondDensity):
         :param n_comps: the number of Gaussian components
         :param pi: a torch callable X |-> n x K
         :param mu: a torch callable X |-> n x K x dy
-        :param variance: a torch callable X |-> n x K 
+        :param variance: a torch callable X |-> n x K x dy
         """
         self.n_comps = n_comps
         self.pi = pi
@@ -203,11 +203,11 @@ class CDMixtureDensityNetwork(UnnormalizedCondDensity):
         self._dy = dy
 
     def log_den(self, X, Y):
+        # unnormalized density
         super().log_den(X, Y)
         return self.log_normalized_den(X, Y)
 
     def log_normalized_den(self, X, Y):
-        # Y has to be n x 1
         super().log_den(X, Y)
         n, dx = X.shape
         dy = Y.shape[1]
@@ -229,21 +229,35 @@ class CDMixtureDensityNetwork(UnnormalizedCondDensity):
         assert Pi.shape[0] == n
         assert Pi.shape[1] == K
 
-        # Var: n x K
+        # Var: n x K x dy
         Var = f_variance(X)
-        assert len(Var.shape) == 2
         assert Var.shape[0] == n
         assert Var.shape[1] == K
+        assert Var.shape[2] == dy
+        if torch.any(torch.isnan(Var)):
+            warnings.warn('Var contains nan.')
+        S = torch.sqrt(Var)
+        if torch.any(torch.isnan(S)):
+            warnings.warn('S contains nan.')
 
+        # print('S.shape: {}'.format(S.shape))
+        # print('Mu.shape: {}'.format(Mu.shape))
+        # print('Y.shape: {}'.format(Y.shape))
         # broadcasting
-        squared = torch.sum((Y - Mu)**2, dim=1)
+        Z = (Y.reshape(n, 1, dy) - Mu)/S
+        if torch.any(torch.isnan(Z)):
+            warnings.warn('Z contains nan.')
+        squared = torch.sum(Z**2, dim=2) # n x K 
         assert squared.shape[0] == n
         assert squared.shape[1] == K
-        const = 1.0/math.sqrt(2.0*math.pi)
+        const = 1.0/math.sqrt(2.0*math.pi)**dy
+        Sig_prod = torch.prod(S, dim=2) # n x K
         # TODO: make the computation robust to numerical errors. Perhaps use
         # logsumexp trick.
-        E = torch.exp(-0.5*squared/Var) * const * Pi / torch.sqrt(Var)
+        E = torch.exp(-0.5*squared) * const * Pi / Sig_prod
+        # sum over the K dimension
         log_prob = torch.log(torch.sum(E, dim=1))
+        assert len(log_prob) == n
         return log_prob
 
     def dx(self):

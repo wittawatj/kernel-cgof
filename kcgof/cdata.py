@@ -110,8 +110,8 @@ class CondSource(object):
         """
         raise NotImplementedError()
 
-    def __call__(self, X, seed):
-        return self.cond_pair_sample(X, seed)
+    def __call__(self, X, seed, *args, **kwargs):
+        return self.cond_pair_sample(X, seed, *args, **kwargs)
 
     @abstractmethod
     def dx(self):
@@ -137,7 +137,7 @@ class CSMixtureDensityNetwork(CondSource):
         :param n_comps: the number of Gaussian components
         :param pi: a torch callable X |-> n x K
         :param mu: a torch callable X |-> n x K x dy
-        :param variance: a torch callable X |-> n x K 
+        :param variance: a torch callable X |-> n x K  x dy
         """
         self.n_comps = n_comps
         self.pi = pi
@@ -148,17 +148,21 @@ class CSMixtureDensityNetwork(CondSource):
         assert dy > 0
         self._dy = dy
 
-
-    def cond_pair_sample(self, X, seed):
-        raise NotImplementedError()
+    def cond_pair_sample(self, X, seed, verbose=False):
 
         if X.shape[1] != self._dx:
             raise ValueError('Input dimension in X (found {}) does not match dx ({}) as specified by the model.'.format(X.shape[1], self._dx))
         n = X.shape[0]
         K = self.n_comps
+        dy = self.dy()
         f_pi = self.pi
         f_mu = self.mu
         f_variance = self.variance
+
+        Y = torch.zeros(n, dy)
+        # n x dy. The means corresponding to the picked components for each point.
+        Mu_picked_component= torch.zeros(n, dy)
+        Var_picked_component = torch.zeros(n, dy)
 
         # TODO improve the implementation to be faster
         with util.TorchSeedContext(seed=seed):
@@ -172,9 +176,25 @@ class CSMixtureDensityNetwork(CondSource):
 
                 # 1 x K x dy
                 Mui = f_mu(Xi)
-                Muiki = Mui
 
+                # 1 x K x dy
+                Vari = f_variance(Xi)
 
+                # pick the component
+                Mui_ki = Mui[:, ki.item(), :] # 1xdy
+                Vari_ki = Vari[:, ki.item(), :] # 1xdy
+
+                Mu_picked_component[i] = Mui_ki.detach()
+                Var_picked_component[i] = Vari_ki.detach()
+
+                Yi = torch.randn(dy)*Vari_ki**0.5 + Mui_ki
+                Y[i] = Yi
+
+        if verbose:
+            print('Mu_picked_component.T:')
+            print(Mu_picked_component.T)
+            print('Var_picked_component.T:')
+            print(Var_picked_component.T)
         # # Pi: n x K 
         # Pi = f_pi(X)
 
@@ -183,7 +203,7 @@ class CSMixtureDensityNetwork(CondSource):
 
         # Var: n x K
         # Var = f_variance(X)
-        return None
+        return Y
 
     def dx(self):
         return self._dx
