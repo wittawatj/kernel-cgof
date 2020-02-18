@@ -286,6 +286,8 @@ class FSCDPowerCriterion(object):
     where G is the RKHS-valued function such that its squared RKHS norm
     defines the KSSD statistic. The witness is supposed to be a zero function
     under H0. In practice, G has to be estimated from the data.
+
+    High power criterion indicates a poor fit of the model on the data.
     """
     def __init__(self, p, k, l, X, Y):
         """

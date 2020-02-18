@@ -214,7 +214,7 @@ def met_gfscd_J1_rand(p, rx, cond_source, n, r, J=1):
     X, Y = sample_xy(rx, cond_source, n, r)
     # start timing
     with util.ContextTimer() as t:
-        tr, te = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5)
+        tr, te = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.3)
         Xtr, Ytr = tr.xy()
         # fit a Gaussian and draw J locations
         npV = util.fit_gaussian_sample(Xtr.detach().numpy(), J, seed=r+750)
@@ -442,7 +442,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 200
+reps = 300
 
 # tests to try
 method_funcs = [ 
