@@ -19,7 +19,7 @@ _default_config = {
 
     # Full path to the directory to store temporary files when running
     # experiments.     
-    'ex_scratch_path': '/is/ei/wittawat/tmp/kcgof',
+    'ex_scratch_path': '/home/wittawat/tmp/kcgof',
 
     # True or False. If False, just use for loop.
     'ex_use_slurm_cluster': False,
@@ -31,7 +31,7 @@ _default_config = {
     'ex_slurm_partitions': None,
 
     # Full path to the directory to store experimental results.
-    'ex_results_path': '/is/ei/wittawat/results/kcgof',
+    'ex_results_path': '/home/wittawat/results/kcgof',
 
     # Full path to the root directory of the shared folder. This folder contains
     # all resource files (e.g., data, trained models) that are released by the
