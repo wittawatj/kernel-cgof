@@ -9,6 +9,7 @@ from abc import ABCMeta, abstractmethod
 import kcgof
 import kcgof.util as util
 import kcgof.kernel as ker
+import kcgof.cdensity as cd
 import torch
 import torch.distributions as dists
 import torch.optim as optim
@@ -783,6 +784,156 @@ class ZhengKLTestMC(ZhengKLTest):
         return stat
 
 
+class ZhengKLTestGaussHerm(ZhengKLTest):
+    """
+    An implementation of 
+    "Zheng 2000, A CONSISTENT TEST OF CONDITIONAL PARAMETRIC DISTRIBUTIONS", 
+    which uses the first order approximation of KL divergence as the decision
+    criterion. 
+    Currently this class only supports conditional density with output 
+    dimension 1. 
+    This is a class specialised for OLS model with Gaussian noise. 
+
+    The model paramter is assumed to be fixed at the best one (no estimator). 
+    Args: 
+        p: an instance of UnnormalizedDensity
+        alpha: significance level
+        kx: smoothing kernel function for covariates. Default is Zheng's kernel.
+        ky: smoothing kernel function for output variables. Default is Zheng's kernel.
+    """
+
+    def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
+        super(ZhengKLTestGaussHerm, self).__init__(p, alpha, kx, ky, rate)
+        if type(p) is not cd.CDGaussianOLS:
+                raise ValueError('This method is only for Gaussian CD.')
+
+    def _integrand_wo_gaussian(self, y, y0, x, h):
+        from math import pi
+        slope = self.p.slope
+        c = self.p.c
+        mean = x @ slope 
+        std = self.p.variance**0.5
+        y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, -1)
+        y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, -1)
+        x_ = torch.from_numpy(np.array(x)).type(torch.float).view(1, -1)
+        val = self.ky((y0_-(2**0.5*std*y_+mean))/h, h) / (pi**0.5)
+        return val.numpy()
+
+    def integrate(self, y0, x, h, lb=-np.inf, ub=np.inf):
+        inted = quad(self._integrand, lb, ub, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
+        return inted
+
+    def compute_stat(self, X, Y, h=None): 
+        """
+        Compute the test static. 
+        h: optinal kernel width param
+        """
+
+        def integrate_gaussherm(y0, x, h, deg=5):
+            """
+            Numerically integrate the integral in the statistic of Zheng 2000
+            with Gauss-Hermitite quadrature.
+
+            deg: degree of polynomials
+            """
+            import numpy
+            from numpy.polynomial.hermite import hermgauss
+            points, weights = hermgauss(deg)
+            n = len(weights)
+            vec_evals = np.empty(n)
+            for i in range(n):
+                vec_evals[i] = self._integrand_wo_gaussian(points[i], y0,
+                                                           x, h)
+            integrated = weights.dot(vec_evals)
+            return integrated
+
+        def vec_integrate(K1, Y, X, h):
+            """
+            K1: n x n_
+            K1 can contain zeros. Do not do numerical integration in the cell
+                [i,j] where K1[i,j] = 0 = 0
+            """
+            int_results = np.empty([Y.shape[0], X.shape[0]])
+            # TODO: What should the integral width be? Depends on h?
+            integral_width = 1.0
+            n = Y.shape[0]
+            for i in range(n):
+                for j in range(i, n):
+                    if torch.abs(K1[i, j]) <= 1e-7: # 0
+                        int_results[i,j]= 0.0
+                        int_results[j, i] = 0.0
+
+                    else:
+                        # Previously we used integrate(..) which uses quad(..)
+                        # print(X[j])
+                        #int_quad = self.integrate(Y[i], X[j], h)
+                        # Add the following line just to print integrated values
+                        #print('quad integrate: ', int_quad)
+                        # We use Gaussian Hermite quadrature
+                        int_gaussherm = integrate_gaussherm(Y[i], X[j], h)
+                        # print('Gauss-Herm: {}'.format(int_gaussherm))
+                        # print()
+
+                        # int_results[i, j] = int_quad
+                        int_results[i, j] = int_gaussherm
+                        int_results[j, i] = int_results[i, j]
+            return int_results
+
+        n, dx = X.shape
+        dy = Y.shape[1]
+        if h is None:
+           h = n**((self.rate-1.)/(dx+dy))
+
+        # K1: n x n
+        K1 = self.kx((X.unsqueeze(1)-X)/h)
+        # print(K1)
+        K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
+
+        integrated = torch.from_numpy(vec_integrate(K1, Y, X, h))
+        # vec_integrate_ = np.vectorize(integrate, signature='(n),(m),()->()')
+        # integrated = torch.from_numpy(vec_integrate_(Y.reshape([n, dy]), X, h))
+
+        # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
+        K = K1 * (K2 - integrated)
+        log_den = self.p.log_normalized_den(X, Y)
+        K /= torch.exp(log_den).reshape(1, -1)
+
+        var = K1**2
+        var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
+        var = var / h**(dx) / (n*(n-1))
+
+        stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
+        # Statistic = Eq. 2.13 in Zheng 2000
+        stat *= n * h**(-(dx+dy)/2) / var**0.5
+        return stat
+
+    def perform_test(self, X, Y):
+        """
+        X: Torch tensor of size n x dx
+        Y: Torch tensor of size n x dy
+
+        perform the goodness-of-fit test and return values computed in a
+        dictionary:
+        {
+            alpha: 0.01, 
+            pvalue: 0.0002, 
+            test_stat: 2.3, 
+            h0_rejected: True, 
+            time_secs: ...
+        }
+        """
+        with util.ContextTimer() as t:
+            alpha = self.alpha
+            stat = self.compute_stat(X, Y)
+            pvalue = (1 - dists.Normal(0, 1).cdf(stat)).item()
+
+        results = {'alpha': self.alpha, 'pvalue': pvalue,
+                   'test_stat': stat.item(),
+                   'h0_rejected': pvalue < alpha, 'time_secs': t.secs,
+                   }
+        return results
+
+    
 class MMDTest(CGofTest):
     """
     A MMD test for a goodness-of-fit test for conditional density models. 
@@ -850,3 +1001,26 @@ class MMDTest(CGofTest):
 
         results['time_secs'] = t.secs
         return results
+
+
+class CramerVonMisesTest(CGofTest): 
+
+    def __init__(self, p, n_bootstrap=400, alpha=0.01, seed=11):
+        self.p = p 
+        self.n_bootstrap = n_bootstrap
+        self.alpha = alpha
+        self.seed =seed 
+   
+    @staticmethod
+    def _empirical_cdf(X, x):  
+        """
+        X: n x d torch tensor 
+        x: a d-dimensional vector (1-tensor)
+        Return empirical CDF given sample X evaluated at x
+        """
+
+    def compute_stat(self, X, Y): 
+        pass
+
+    def perform_test(self, X, Y):
+        pass
