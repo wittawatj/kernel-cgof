@@ -542,16 +542,62 @@ class ZhengKLTest(CGofTest):
         """
         def integrate(y0, x, h, lb=-np.inf, ub=np.inf):
             inted = quad(self._integrand, lb, ub, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
-            print(inted)
             return inted
 
-        def vec_integrate(Y, X, h):
+        def integrate_gaussleg(y0, x, h, lb=-10, ub=10, n_nodes=10):
+            """
+            Numerically integrate the integral in the statistic of Zheng 2000
+            with Gauss-Legendre.
+
+            n_nodes: number of nodes used to approximate the integral
+            """
+            # TODO: What should be the value of n_nodes?
+            import numpy
+            from numpy.polynomial import legendre
+
+            f_int = lambda yy: self._integrand(yy, y0, x, h)
+            YY, W = legendre.leggauss(n_nodes)
+
+            #https://en.wikipedia.org/wiki/Gaussian_quadrature
+            f_arg = (ub-lb)/2.0*YY + (ub+lb)/2.0 
+            f_arg = f_arg.reshape(-1, 1)
+            f_eval_values = np.zeros(n_nodes)
+            for i in range(n_nodes):
+                f_eval_values[i] = f_int(f_arg[i])
+            
+            # f_eval_values = f_int(f_arg)
+            gaussleg_int = 0.5*(ub-lb)*W.dot( f_eval_values ) 
+            return gaussleg_int
+
+        def vec_integrate(K1, Y, X, h):
+            """
+            K1: n x n_
+            K1 can contain zeros. Do not do numerical integration in the cell
+                [i,j] where K1[i,j] = 0 = 0
+            """
             int_results = np.empty([Y.shape[0], X.shape[0]])
+            # TODO: What should the integral width be? Depends on h?
+            integral_width = 1.0
             n = Y.shape[0]
             for i in range(n):
                 for j in range(i, n):
-                    int_results[i, j] = integrate(Y[i], X[j], h)
-                    int_results[j, i] = int_results[i, j]
+                    if torch.abs(K1[i, j]) <= 1e-7: # 0
+                        int_results[i,j]= 0.0
+                        int_results[j, i] = 0.0
+
+                    else:
+                        # Previously we used integrate(..) which uses quad(..)
+                        int_quad = integrate(Y[i], X[j], h)
+                        # Add the following line just to print integrated values
+                        print('quad integrate: ', int_quad)
+                        # int_gaussleg  = integrate_gaussleg(
+                        #     Y[i], X[j], h, 
+                        #     lb=Y[i].item()-integral_width, ub=Y[i].item()+integral_width)
+                        # print('Gauss-Legendre: {}'.format(int_gaussleg))
+                        print()
+
+                        int_results[i, j] = int_quad
+                        int_results[j, i] = int_results[i, j]
             return int_results
 
         n, dx = X.shape
@@ -561,9 +607,10 @@ class ZhengKLTest(CGofTest):
 
         # K1: n x n
         K1 = self.kx((X.unsqueeze(1)-X)/h)
+        # print(K1)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
-        integrated = torch.from_numpy(vec_integrate(Y, X, h))
+        integrated = torch.from_numpy(vec_integrate(K1, Y, X, h))
         # vec_integrate_ = np.vectorize(integrate, signature='(n),(m),()->()')
         # integrated = torch.from_numpy(vec_integrate_(Y.reshape([n, dy]), X, h))
 
