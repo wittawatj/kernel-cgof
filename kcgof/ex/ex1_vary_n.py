@@ -314,6 +314,23 @@ def met_gfscd_J1_opt_tr50(p, rx, cond_source, n, r, J=1, tr_proportion=0.5):
         # 'test': fscdtest,
         'test_result': result, 'time_secs': t.secs}
 
+def met_zhengkl_mc(p, rx, cond_source, n, r):
+    """
+    Zheng 2000 test implemented with Monte Carlo integration.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # number of Monte Carlo particles
+        n_mc = 400
+        # the test
+        zheng_mc = cgof.ZhengKLTestMC(p, alpha, n_mc=400)
+        result = zheng_mc.perform_test(X, Y)
+
+    return { 
+        # 'test': zheng_test,
+        'test_result': result, 'time_secs': t.secs}
+
 def met_zhengkl(p, rx, cond_source, n, r):
     """
     "Zheng 2000, A CONSISTENT TEST OF CONDITIONAL PARAMETRIC DISTRIBUTIONS", 
@@ -424,6 +441,7 @@ from kcgof.ex.ex1_vary_n import met_gmmd_med
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
+from kcgof.ex.ex1_vary_n import met_zhengkl_mc
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr30
@@ -442,12 +460,11 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 300
+reps = 50
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
-    met_gmmd_med,
     met_gfscd_J5_opt_tr30,
     met_gfscd_J1_opt_tr30,
 
@@ -456,6 +473,8 @@ method_funcs = [
     # met_zhengkl,
     met_gfscd_J5_rand,
     met_gfscd_J1_rand,
+    met_gmmd_med,
+    met_zhengkl_mc,
     # met_gfscd_J1_opt_tr50,
     # met_gfscd_J5_opt_tr50,
 
