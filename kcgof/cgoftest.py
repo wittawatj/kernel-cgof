@@ -535,14 +535,15 @@ class ZhengKLTest(CGofTest):
         val = self.ky((y0_-y_)/h, h) * torch.exp(self.p.log_normalized_den(x_, y_))
         return val.numpy()
 
+    def integrate(self, y0, x, h, lb=-np.inf, ub=np.inf):
+        inted = quad(self._integrand, lb, ub, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
+        return inted
+
     def compute_stat(self, X, Y, h=None): 
         """
         Compute the test static. 
         h: optinal kernel width param
         """
-        def integrate(y0, x, h, lb=-np.inf, ub=np.inf):
-            inted = quad(self._integrand, lb, ub, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
-            return inted
 
         def integrate_gaussleg(y0, x, h, lb=-10, ub=10, n_nodes=10):
             """
@@ -587,14 +588,15 @@ class ZhengKLTest(CGofTest):
 
                     else:
                         # Previously we used integrate(..) which uses quad(..)
-                        int_quad = integrate(Y[i], X[j], h)
+                        # print(X[j])
+                        int_quad = self.integrate(Y[i], X[j], h)
                         # Add the following line just to print integrated values
-                        print('quad integrate: ', int_quad)
+                        # print('quad integrate: ', int_quad)
                         # int_gaussleg  = integrate_gaussleg(
                         #     Y[i], X[j], h, 
                         #     lb=Y[i].item()-integral_width, ub=Y[i].item()+integral_width)
                         # print('Gauss-Legendre: {}'.format(int_gaussleg))
-                        print()
+                        # print()
 
                         int_results[i, j] = int_quad
                         int_results[j, i] = int_results[i, j]
@@ -682,6 +684,103 @@ class ZhengKLTest(CGofTest):
         neg_idx = (Y<0) & (Y>-1./h)
         K[neg_idx] = 2.*torch.exp(-2*(Y[neg_idx]+1./h)) / weight
         return torch.prod(K, dim=-1)
+
+class ZhengKLTestMC(ZhengKLTest):
+    """ 
+    Zheng 2000 test without the numerical integration. See ZhengKLTest for
+    another version with numerical integration. In this version, samples are
+    drawn from the conditional model instead. Require that the specified
+    model has a get_condsource(..) implemented.
+
+    This Monte Carlo version is done to speed up.
+    """
+    def __init__(self, p, alpha, n_mc=500, kx=None, ky=None, rate=0.5, verbose=False):
+        """
+        n_mc: number of samples to use for the Monte Carlo integration
+        verbose: if true, print debugging information.
+        """
+        super(ZhengKLTestMC, self).__init__(p, alpha, kx, ky, rate)
+        self.n_mc = n_mc
+        self.verbose = verbose
+        if p.dy() != 1:
+            raise ValueError(('this test can be used only '
+                              'for 1-d y'))
+        if p.get_condsource() is None:
+            raise ValueError('This test requires a way to sample from the model. The model p needs to implement get_condsource().')
+
+    def compute_stat(self, X, Y, h=None): 
+        """
+        Compute the test static. 
+        h: optinal kernel width param
+        """
+        n, dx = X.shape
+        dy = Y.shape[1]
+        if h is None:
+           h = n**((self.rate-1.)/(dx+dy))
+        p = self.p
+        # requires a CondSource
+        cs = p.get_condsource()
+
+        # K1: n x n
+        K1 = self.kx((X.unsqueeze(1)-X)/h)
+        # print(K1)
+        K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
+
+        def vec_montecarlo(K1, Y, X, h, n_sample):
+            """
+            K1: n x n_
+            K1 can contain zeros. Do not do numerical integration in the cell
+                [i,j] where K1[i,j] =  0
+
+            n_sample: number of samples to draw from the conditional model 
+                to do Monte Carlo integration.
+            """
+            int_results = np.empty([Y.shape[0], X.shape[0]])
+            # TODO: What should the integral width be? Depends on h?
+            n = Y.shape[0]
+            for i in range(n):
+                for j in range(i, n):
+                    if torch.abs(K1[i, j]) <= 1e-7: # 0
+                        int_results[i,j]= 0.0
+                        int_results[j, i] = 0.0
+
+                    else:
+                        # Monte Carlo integration
+                        # Sample from model p(y|x_j)
+                        XXj = X[j].reshape(1, dx).repeat(n_sample, 1)
+                        # sample
+                        YYj = cs(XXj, seed=587)
+                        KYYj = self.ky((Y[i] - YYj)/h, h)
+                        int_mc = torch.mean(KYYj)
+
+                        if self.verbose:
+                            print('MC integrate: {}'.format(int_mc))
+                            # Add the following line just to print quad (expensive) integrated values
+                            int_quad = self.integrate(Y[i], X[j], h)
+                            print('quad integrate: ', int_quad)
+                            print()
+
+                        int_results[i, j] = int_mc
+                        int_results[j, i] = int_results[i, j]
+            return int_results
+
+        integrated = torch.from_numpy(vec_montecarlo(K1, Y, X, h, self.n_mc))
+        # vec_integrate_ = np.vectorize(integrate, signature='(n),(m),()->()')
+        # integrated = torch.from_numpy(vec_integrate_(Y.reshape([n, dy]), X, h))
+
+        # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
+        K = K1 * (K2 - integrated)
+        log_den = self.p.log_normalized_den(X, Y)
+        K /= torch.exp(log_den).reshape(1, -1)
+
+        var = K1**2
+        var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
+        var = var / h**(dx) / (n*(n-1))
+
+        stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
+        # Statistic = Eq. 2.13 in Zheng 2000
+        stat *= n * h**(-(dx+dy)/2) / var**0.5
+        return stat
 
 
 class MMDTest(CGofTest):
