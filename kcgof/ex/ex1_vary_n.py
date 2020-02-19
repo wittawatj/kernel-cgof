@@ -103,7 +103,35 @@ def met_gmmd_med(p, rx, cond_source, n, r):
         result = mmdtest.perform_test(X, Y)
 
     return { 
-        # 'test': kssdtest,
+        # 'test': mmdtest,
+        'test_result': result, 'time_secs': t.secs}
+
+
+def met_gmmd_split_med(p, rx, cond_source, n, r):
+    """ 
+    Same as met_gmmd_med but perform data splitting to guarantee that the
+    two sets of samples are independent. Effective sample size is then n/2.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+
+    # start timing
+    with util.ContextTimer() as t:
+        # median heuristic
+        sigx = util.pt_meddistance(X, subsample=600, seed=r+4)
+        sigy = util.pt_meddistance(Y, subsample=600, seed=r+39)
+
+        # kernels
+        # k = kernel on X. Need a kernel that can operator on numpy arrays
+        k = kgof.kernel.KGauss(sigma2=sigx**2)
+        # l = kernel on Y
+        l = kgof.kernel.KGauss(sigma2=sigy**2)
+
+        # Construct an MMD test object. Require freqopttest package.
+        mmdtest = cgof.MMDSplitTest(p, k, l, n_permute=400, alpha=alpha, seed=r+37)
+        result = mmdtest.perform_test(X, Y)
+
+    return { 
+        # 'test': mmdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_gkssd_med(p, rx, cond_source, n, r):
@@ -322,10 +350,25 @@ def met_zhengkl_mc(p, rx, cond_source, n, r):
     # start timing
     with util.ContextTimer() as t:
         # number of Monte Carlo particles
-        n_mc = 400
+        n_mc = 5000
         # the test
-        zheng_mc = cgof.ZhengKLTestMC(p, alpha, n_mc=400)
+        zheng_mc = cgof.ZhengKLTestMC(p, alpha, n_mc=n_mc)
         result = zheng_mc.perform_test(X, Y)
+
+    return { 
+        # 'test': zheng_test,
+        'test_result': result, 'time_secs': t.secs}
+
+def met_zhengkl_gh(p, rx, cond_source, n, r):
+    """
+    Zheng 2000 test implemented with Gauss Hermite quadrature.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # the test
+        zheng_gh = cgof.ZhengKLTestGaussHerm(p, alpha)
+        result = zheng_gh.perform_test(X, Y)
 
     return { 
         # 'test': zheng_test,
@@ -350,44 +393,6 @@ def met_zhengkl(p, rx, cond_source, n, r):
         # 'test': zheng_test,
         'test_result': result, 'time_secs': t.secs}
 
-# def met_gmmd_med(P, Q, data_source, n, r):
-#     """
-#     Use met_gmmd_med_bounliphone(). It uses the median heuristic following
-#     Bounliphone et al., 2016.
-
-#     Bounliphone et al., 2016's MMD-based 3-sample test.
-#     * Gaussian kernel. 
-#     * Gaussian width = mean of (median heuristic on (X, Z), median heuristic on
-#         (Y, Z))
-#     * Use full sample for testing (no
-#     holding out for optimization)
-#     """
-#     if not P.has_datasource() or not Q.has_datasource():
-#         # Not applicable. Return {}.
-#         return {}
-
-#     ds_p = P.get_datasource()
-#     ds_q = Q.get_datasource()
-#     # sample some data 
-#     datp, datq, datr = sample_pqr(ds_p, ds_q, data_source, n, r, only_from_r=False)
-
-#     # Start the timer here
-#     with util.ContextTimer() as t:
-#         X, Y, Z = datp.data(), datq.data(), datr.data()
-
-#         # hyperparameters of the test
-#         medxz = util.meddistance(np.vstack((X, Z)), subsample=1000)
-#         medyz = util.meddistance(np.vstack((Y, Z)), subsample=1000)
-#         medxyz = np.mean([medxz, medyz])
-#         k = kernel.KGauss(sigma2=medxyz**2)
-
-#         scmmd = mct.SC_MMD(datp, datq, k, alpha=alpha)
-#         scmmd_result = scmmd.perform_test(datr)
-
-#     return {
-#             # This key "test" can be removed.             
-#             #'test': scmmd, 
-#             'test_result': scmmd_result, 'time_secs': t.secs}
 
 # Define our custom Job, which inherits from base class IndependentJob
 class Ex1Job(IndependentJob):
@@ -425,7 +430,7 @@ class Ex1Job(IndependentJob):
             self.aggregator.submit_result(result)
             func_name = met_func.__name__
 
-        logger.info("done. ex2: %s, prob=%s, r=%d, n=%d. Took: %.3g s "%(func_name,
+        logger.info("done. ex1: %s, prob=%s, r=%d, n=%d. Took: %.3g s "%(func_name,
             prob_label, r, n, t.secs))
 
         # save result
@@ -438,10 +443,12 @@ class Ex1Job(IndependentJob):
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
 from kcgof.ex.ex1_vary_n import met_gmmd_med
+from kcgof.ex.ex1_vary_n import met_gmmd_split_med
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_zhengkl_mc
+from kcgof.ex.ex1_vary_n import met_zhengkl_gh
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr30
@@ -464,17 +471,21 @@ reps = 50
 
 # tests to try
 method_funcs = [ 
-    met_gkssd_med,
-    met_gfscd_J5_opt_tr30,
-    met_gfscd_J1_opt_tr30,
+    # met_gkssd_med,
+    # met_gfscd_J5_opt_tr30,
+    # met_gfscd_J1_opt_tr30,
 
-    # met_gkssd_opt_tr30,
-    # met_gkssd_opt_tr50,
-    # met_zhengkl,
-    met_gfscd_J5_rand,
-    met_gfscd_J1_rand,
-    met_gmmd_med,
+    # met_gfscd_J5_rand,
+    # met_gfscd_J1_rand,
+    # met_gmmd_med,
+    # met_gmmd_split_med,
+
     met_zhengkl_mc,
+    # met_zhengkl_gh,
+
+    # # met_gkssd_opt_tr30,
+    # # met_gkssd_opt_tr50,
+    # # met_zhengkl,
     # met_gfscd_J1_opt_tr50,
     # met_gfscd_J5_opt_tr50,
 
@@ -528,7 +539,7 @@ def get_ns_model_source(prob_label):
     prob2tuples = { 
         # A case where H0 is true. Gaussian least squares model.
         'gaussls_h0_d5': (
-            [200, 400, 600, 800],
+            [200, 300, 400, 500],
             # p 
             cden.CDGaussianOLS(slope=slope_h0_d5, c=0, variance=1.0),
             # rx
@@ -538,7 +549,7 @@ def get_ns_model_source(prob_label):
         ),
         # simplest case where H0 is true.
         'gaussls_h0_d1': (
-            [200, 400, 600, 800],
+            [200, 300, 400, 500],
             # p 
             cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
             # rx

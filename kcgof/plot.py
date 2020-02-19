@@ -16,7 +16,12 @@ def get_func_tuples():
     """
     func_tuples = [
         ('met_gmmd_med', 'MMD-med', 'g-+'),
-        ('met_gkssd_med', 'KSSD-med', 'r--^'),
+        ('met_gmmd_split_med', 'MMD-med split', 'g-<'),
+
+        ('met_zhengkl_mc', 'Zheng MC', 'm-'),
+        ('met_zhengkl_gh', 'Zheng GH', 'm--'),
+
+        ('met_gkssd_med', 'KSSD', 'r--^'),
         ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),
         ('met_gkssd_opt_tr50', 'KSSD-opt 50tr', 'r-^'),
         

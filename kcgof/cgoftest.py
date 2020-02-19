@@ -695,7 +695,7 @@ class ZhengKLTestMC(ZhengKLTest):
 
     This Monte Carlo version is done to speed up.
     """
-    def __init__(self, p, alpha, n_mc=500, kx=None, ky=None, rate=0.5, verbose=False):
+    def __init__(self, p, alpha, n_mc=2000, kx=None, ky=None, rate=0.5, verbose=False):
         """
         n_mc: number of samples to use for the Monte Carlo integration
         verbose: if true, print debugging information.
@@ -724,7 +724,7 @@ class ZhengKLTestMC(ZhengKLTest):
 
         # K1: n x n
         K1 = self.kx((X.unsqueeze(1)-X)/h)
-        # print(K1)
+        # print(K2)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
         def vec_montecarlo(K1, Y, X, h, n_sample):
@@ -780,7 +780,7 @@ class ZhengKLTestMC(ZhengKLTest):
 
         stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
         # Statistic = Eq. 2.13 in Zheng 2000
-        stat *= n * h**(-(dx+dy)/2) / var**0.5
+        stat *= n * h**((dx+dy)/2.0) / var**0.5
         return stat
 
 
@@ -805,7 +805,7 @@ class ZhengKLTestGaussHerm(ZhengKLTest):
     def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
         super(ZhengKLTestGaussHerm, self).__init__(p, alpha, kx, ky, rate)
         if type(p) is not cd.CDGaussianOLS:
-                raise ValueError('This method is only for Gaussian CD.')
+            raise ValueError('This method is only for Gaussian CD.')
 
     def _integrand_wo_gaussian(self, y, y0, x, h):
         from math import pi
@@ -956,6 +956,8 @@ class MMDTest(CGofTest):
         self.k = k
         self.l = l
         self.ds_p = self.p.get_condsource()
+        if self.ds_p is None:
+            raise ValueError('The test requires that p can be sampled. Must implement p.get_condsource().')
         self.alpha = alpha
         self.seed = seed
         self.n_permute = n_permute
@@ -992,6 +994,94 @@ class MMDTest(CGofTest):
             Y_ = ds_p.cond_pair_sample(X, seed=seed+13)
             real_data = torch.cat([X, Y], dim=1).numpy()
             model_data = torch.cat([X, Y_], dim=1).numpy()
+ 
+            # Run the two-sample test on p_sample and dat
+            # Make a two-sample test data
+            tst_data = fdata.TSTData(real_data, model_data)
+            # Test 
+            results = mmdtest.perform_test(tst_data)
+
+        results['time_secs'] = t.secs
+        return results
+
+class MMDSplitTest(CGofTest):
+    """
+    Same as the MMDTest but split the data (X,Y) into two parts:
+    X1, X2 and Y1, Y2.
+
+    Sample Y2' from the model with p(y|X2).
+    Test the difference between (X1, Y1) and (X2, Y2') with the MMD.
+    The splitting step is to ensure that the two sets of samples are independent.
+    Note that we lose some real samples in the process.
+    """
+
+    def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
+        # logging.warning(('This test does not accept Pytorch '
+        #                  'kernels starting with prefix PT'))
+        super(MMDSplitTest, self).__init__(p, alpha)
+
+        self.p = p
+        self.k = k
+        self.l = l
+        self.ds_p = self.p.get_condsource()
+        if self.ds_p is None:
+            raise ValueError('The test requires that p can be sampled. Must implement p.get_condsource().')
+        self.alpha = alpha
+        self.seed = seed
+        self.n_permute = n_permute
+
+        kprod = ker.KTwoProduct(k, l, p.dx(), p.dy())
+        self.mmdtest = tst.QuadMMDTest(kprod, n_permute, alpha=alpha)
+
+    @staticmethod
+    def _split_half(X, Y):
+        n = X.shape[0]
+        if n%2 != 0:
+            # odd
+            X = X[:-1]
+            Y = Y[:-1]
+
+        # split into two halves of equal sizes
+        dat1, dat2 = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5)
+        X1, Y1 = dat1.xy()
+        X2, Y2 = dat2.xy()
+        return X1, Y1, X2, Y2
+
+    def compute_stat(self, X, Y):
+        """
+        X: Torch tensor of size n x dx
+        Y: Torch tensor of size n x dy
+        
+        Return a test statistic
+        """
+        seed = self.seed
+        ds_p = self.ds_p
+        mmdtest = self.mmdtest
+        # split the data
+        X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y)
+
+        # Draw sample from p
+        Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)
+        real_data = torch.cat([X1, Y1], dim=1).numpy()
+        model_data = torch.cat([X2, Y2_], dim=1).numpy()
+        # Make a two-sample test data
+        tst_data = fdata.TSTData(real_data, model_data)
+        stat = mmdtest.compute_stat(tst_data)
+        return stat
+
+    def perform_test(self, X, Y):
+        ds_p = self.ds_p
+        mmdtest = self.mmdtest
+        seed = self.seed
+
+        with util.ContextTimer() as t:
+            # split the data
+            X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y)
+
+            # Draw sample from p
+            Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)
+            real_data = torch.cat([X1, Y1], dim=1).numpy()
+            model_data = torch.cat([X2, Y2_], dim=1).numpy()
  
             # Run the two-sample test on p_sample and dat
             # Make a two-sample test data
