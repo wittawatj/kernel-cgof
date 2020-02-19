@@ -16,20 +16,20 @@ def get_func_tuples():
     """
     func_tuples = [
         ('met_gmmd_med', 'MMD-med', 'g-+'),
-        ('met_gmmd_split_med', 'MMD-med split', 'g-<'),
+        ('met_gmmd_split_med', 'MMD', 'g-<'),
 
         ('met_zhengkl_mc', 'Zheng MC', 'm-'),
         ('met_zhengkl_gh', 'Zheng GH', 'm--'),
 
-        ('met_gkssd_med', 'KSSD', 'r--^'),
+        ('met_gkssd_med', 'KSSD', 'r-'),
         ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),
         ('met_gkssd_opt_tr50', 'KSSD-opt 50tr', 'r-^'),
         
-        ('met_gfscd_J1_rand', 'FSCD-rand J1', 'b--*'),
-        ('met_gfscd_J5_rand', 'FSCD-rand J5', 'b--h'),
-        ('met_gfscd_J1_opt_tr30', 'FSCD-opt J1 30tr', 'b-1'),
+        ('met_gfscd_J1_rand', 'FSCD-rand J1', 'c--D'),
+        ('met_gfscd_J5_rand', 'FSCD-rand J5', 'k-.<'),
+        ('met_gfscd_J1_opt_tr30', 'FSCD-opt J1', 'm-x'),
         ('met_gfscd_J1_opt_tr50', 'FSCD-opt J1 50tr', 'b-o'),
-        ('met_gfscd_J5_opt_tr30', 'FSCD-opt J5 30tr', 'b-3'),
+        ('met_gfscd_J5_opt_tr30', 'FSCD-opt J5', 'b-P'),
         ('met_gfscd_J5_opt_tr50', 'FSCD-opt J5 50tr', 'b-s'),
 
         ('met_zhengkl', 'Zheng', 'm-x'),

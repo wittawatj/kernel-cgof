@@ -10,6 +10,7 @@ import kcgof
 import kcgof.util as util
 import kcgof.kernel as ker
 import kcgof.cdensity as cd
+import kcgof.cdata as cdat
 import torch
 import torch.distributions as dists
 import torch.optim as optim
@@ -1034,7 +1035,7 @@ class MMDSplitTest(CGofTest):
         self.mmdtest = tst.QuadMMDTest(kprod, n_permute, alpha=alpha)
 
     @staticmethod
-    def _split_half(X, Y):
+    def _split_half(X, Y, seed=28355):
         n = X.shape[0]
         if n%2 != 0:
             # odd
@@ -1042,7 +1043,7 @@ class MMDSplitTest(CGofTest):
             Y = Y[:-1]
 
         # split into two halves of equal sizes
-        dat1, dat2 = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5)
+        dat1, dat2 = cdat.CondData(X, Y).split_tr_te(tr_proportion=0.5, seed=seed)
         X1, Y1 = dat1.xy()
         X2, Y2 = dat2.xy()
         return X1, Y1, X2, Y2
@@ -1058,7 +1059,7 @@ class MMDSplitTest(CGofTest):
         ds_p = self.ds_p
         mmdtest = self.mmdtest
         # split the data
-        X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y)
+        X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+33)
 
         # Draw sample from p
         Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)
@@ -1076,7 +1077,7 @@ class MMDSplitTest(CGofTest):
 
         with util.ContextTimer() as t:
             # split the data
-            X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y)
+            X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+33)
 
             # Draw sample from p
             Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)

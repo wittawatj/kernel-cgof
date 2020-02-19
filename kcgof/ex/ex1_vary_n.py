@@ -350,7 +350,7 @@ def met_zhengkl_mc(p, rx, cond_source, n, r):
     # start timing
     with util.ContextTimer() as t:
         # number of Monte Carlo particles
-        n_mc = 5000
+        n_mc = 10000
         # the test
         zheng_mc = cgof.ZhengKLTestMC(p, alpha, n_mc=n_mc)
         result = zheng_mc.perform_test(X, Y)
@@ -467,20 +467,20 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 50
+reps = 200
 
 # tests to try
 method_funcs = [ 
-    # met_gkssd_med,
-    # met_gfscd_J5_opt_tr30,
-    # met_gfscd_J1_opt_tr30,
+    met_gkssd_med,
+    met_gfscd_J5_opt_tr30,
+    met_gfscd_J1_opt_tr30,
 
-    # met_gfscd_J5_rand,
-    # met_gfscd_J1_rand,
+    met_gfscd_J5_rand,
+    met_gfscd_J1_rand,
     # met_gmmd_med,
-    # met_gmmd_split_med,
+    met_gmmd_split_med,
 
-    met_zhengkl_mc,
+    # met_zhengkl_mc,
     # met_zhengkl_gh,
 
     # # met_gkssd_opt_tr30,
@@ -549,7 +549,7 @@ def get_ns_model_source(prob_label):
         ),
         # simplest case where H0 is true.
         'gaussls_h0_d1': (
-            [200, 300, 400, 500],
+            [200, 300, 500],
             # p 
             cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
             # rx
@@ -560,7 +560,7 @@ def get_ns_model_source(prob_label):
 
         # an obvious case for Gauss LS problem. H1 true. Very easy
         'gaussls_h1_d1_easy': (
-            [100, 300, 500],
+            [100, 200, 300],
             # p 
             cden.CDGaussianOLS(slope=torch.tensor(1.0), c=1.0, variance=1.0),
             # rx
