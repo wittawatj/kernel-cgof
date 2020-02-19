@@ -513,8 +513,8 @@ class ZhengKLTest(CGofTest):
     Args: 
         p: an instance of UnnormalizedDensity
         alpha: significance level
-        kx: kernel function for covariates. Default is Zheng's kernel.
-        ky: kernel function for output variables. Default is Zheng's kernel.
+        kx: smoothing kernel function for covariates. Default is Zheng's kernel.
+        ky: smoothing kernel function for output variables. Default is Zheng's kernel.
     """
 
     def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
@@ -540,8 +540,10 @@ class ZhengKLTest(CGofTest):
         Compute the test static. 
         h: optinal kernel width param
         """
-        def integrate(y0, x, h):
-            return quad(self._integrand, -np.inf, np.inf, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
+        def integrate(y0, x, h, lb=-np.inf, ub=np.inf):
+            inted = quad(self._integrand, lb, ub, args=(y0, x, h), epsabs=1.49e-3, limit=10)[0]
+            print(inted)
+            return inted
 
         def vec_integrate(Y, X, h):
             int_results = np.empty([Y.shape[0], X.shape[0]])
@@ -557,21 +559,25 @@ class ZhengKLTest(CGofTest):
         if h is None:
            h = n**((self.rate-1.)/(dx+dy))
 
+        # K1: n x n
         K1 = self.kx((X.unsqueeze(1)-X)/h)
         K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
 
         integrated = torch.from_numpy(vec_integrate(Y, X, h))
         # vec_integrate_ = np.vectorize(integrate, signature='(n),(m),()->()')
         # integrated = torch.from_numpy(vec_integrate_(Y.reshape([n, dy]), X, h))
+
+        # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
-        K /= torch.exp(log_den)
+        K /= torch.exp(log_den).reshape(1, -1)
 
         var = K1**2
         var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
         var = var / h**(dx) / (n*(n-1))
 
         stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
+        # Statistic = Eq. 2.13 in Zheng 2000
         stat *= n * h**(-(dx+dy)/2) / var**0.5
         return stat
 
@@ -619,7 +625,7 @@ class ZhengKLTest(CGofTest):
     def K2(Y, h):
         """
         Kernel function for dependent variables used in Zheng's paper. 
-        X: Torch tensor of size n x dy
+        Y: Torch tensor of size n x dy
         Return: kernel evaluated at Y of size n
         """
         K = torch.zeros(Y.shape)
