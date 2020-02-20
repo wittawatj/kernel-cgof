@@ -364,10 +364,11 @@ def met_zhengkl_gh(p, rx, cond_source, n, r):
     Zheng 2000 test implemented with Gauss Hermite quadrature.
     """
     X, Y = sample_xy(rx, cond_source, n, r)
+    rate = (cond_source.dx() + cond_source.dy()) * 4./5
     # start timing
     with util.ContextTimer() as t:
         # the test
-        zheng_gh = cgof.ZhengKLTestGaussHerm(p, alpha)
+        zheng_gh = cgof.ZhengKLTestGaussHerm(p, alpha, rate=rate)
         result = zheng_gh.perform_test(X, Y)
 
     return { 
@@ -391,6 +392,26 @@ def met_zhengkl(p, rx, cond_source, n, r):
 
     return { 
         # 'test': zheng_test,
+        'test_result': result, 'time_secs': t.secs}
+
+
+def met_cramer_vm(p, rx, cond_source, n, r):
+    """
+    KSSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
+    med = Use median heuristic to choose the bandwidths for both kernels.
+    Compute the median heuristic on the data X and Y separate to get the two
+    bandwidths.
+    """
+    X, Y = sample_xy(rx, cond_source, n, r)
+
+    # start timing
+    with util.ContextTimer() as t:
+        # Construct a CramerVonMisesTest test object
+        cvm = cgof.CramerVonMisesTest(p, alpha=alpha, n_bootstrap=200, seed=r+88)
+        result = cvm.perform_test(X, Y)
+
+    return { 
+        # 'test': kssdtest,
         'test_result': result, 'time_secs': t.secs}
 
 

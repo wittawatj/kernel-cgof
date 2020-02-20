@@ -812,7 +812,7 @@ class ZhengKLTestGaussHerm(ZhengKLTest):
         from math import pi
         slope = self.p.slope
         c = self.p.c
-        mean = x @ slope 
+        mean = x @ slope + c
         std = self.p.variance**0.5
         y_ = torch.from_numpy(np.array(y)).type(torch.float).view(1, -1)
         y0_ = torch.from_numpy(np.array(y0)).type(torch.float).view(1, -1)
@@ -1096,22 +1096,86 @@ class MMDSplitTest(CGofTest):
 
 class CramerVonMisesTest(CGofTest): 
 
-    def __init__(self, p, n_bootstrap=400, alpha=0.01, seed=11):
+    def __init__(self, p, n_bootstrap=100, alpha=0.01, seed=11):
+        if type(p) is not cd.CDGaussianOLS:
+                raise ValueError('This method is only for Gaussian CD.')
         self.p = p 
         self.n_bootstrap = n_bootstrap
         self.alpha = alpha
         self.seed =seed 
    
     @staticmethod
-    def _empirical_cdf(X, x):  
+    def empirical_cdf(X, x):  
         """
         X: n x d torch tensor 
         x: a d-dimensional vector (1-tensor)
         Return empirical CDF given sample X evaluated at x
         """
+        return (1.*(X <= x).prod(dim=-1))
+
+    @staticmethod
+    def prod_empirical_cdf(X, Y):
+        """
+        X: n x d torch tensor 
+        Y: n x d torch tensor 
+        Return the product CDF given sample X evaluated at x (size n)
+        """
+        n = X.shape[0]
+        Xpart = 1. * (X <= X.unsqueeze(1)).prod(dim=-1)
+        Ypart = 1. * (Y <= Y.unsqueeze(1)).prod(dim=-1)
+        return torch.mean(Xpart * Ypart, dim=0)
+
+    def Hn0(self, X, Y):
+        n = X.shape[0]
+        p = self.p 
+        mean = X @ p.slope + p.c
+        std = self.p.variance**0.5
+        Hn0 = torch.empty(n, n)
+
+        norms = [dists.Normal(mean[i], std * torch.eye(p.dy()))
+                 for i in range(n)]
+        for j in range(n):
+            norm = norms[j]
+            Hn0[:, j] = norm.cdf(Y).squeeze()
+        Hn0 *= CramerVonMisesTest.empirical_cdf(X, X.unsqueeze(1))
+        Hn0 = Hn0.mean(dim=0)
+        return Hn0
 
     def compute_stat(self, X, Y): 
-        pass
+        n = X.shape[0]
+        Hn = (CramerVonMisesTest.prod_empirical_cdf(X, Y))
+        Hn0 = self.Hn0(X, Y)
+        return torch.sum((Hn - Hn0)**2)
 
     def perform_test(self, X, Y):
-        pass
+        with util.ContextTimer() as t:
+            alpha = self.alpha
+            n_bootstrap = self.n_bootstrap
+            n = X.shape[0]
+            ds = self.p.get_condsource()
+
+            test_stat = self.compute_stat(X, Y)
+            # bootstrapping
+            sim_stats = torch.zeros(n_bootstrap)
+            with torch.no_grad():
+                with util.TorchSeedContext(seed=self.seed):
+                    for i in range(n_bootstrap):
+                        idx = torch.randint(0, n, [n])
+                        X_ = X[idx]
+                        Y_ = ds.cond_pair_sample(X_, self.seed+i)
+                        # Bootstrapped statistic
+                        Hn_ = (CramerVonMisesTest.prod_empirical_cdf(X_, Y_))
+                        Hn0_ = self.Hn0(X_, Y_)
+                        boot_stat = torch.sum((Hn_ - Hn0_)**2)
+                        sim_stats[i] = boot_stat
+ 
+            # approximate p-value with the permutations 
+            I = sim_stats > test_stat
+            pvalue = torch.mean(I.type(torch.float)).item()
+ 
+        results = {'alpha': self.alpha, 'pvalue': pvalue, 
+            'test_stat': test_stat.item(),
+                 'h0_rejected': pvalue < alpha, 'n_simulate': n_bootstrap,
+                 'time_secs': t.secs, 
+                 }
+        return results
