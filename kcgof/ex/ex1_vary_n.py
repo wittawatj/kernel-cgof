@@ -463,6 +463,7 @@ class Ex1Job(IndependentJob):
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
 from kcgof.ex.ex1_vary_n import met_gkssd_med
+from kcgof.ex.ex1_vary_n import met_cramer_vm
 from kcgof.ex.ex1_vary_n import met_gmmd_med
 from kcgof.ex.ex1_vary_n import met_gmmd_split_med
 from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
@@ -500,6 +501,7 @@ method_funcs = [
     met_gfscd_J1_rand,
     # met_gmmd_med,
     met_gmmd_split_med,
+    met_cramer_vm,
 
     # met_zhengkl_mc,
     # met_zhengkl_gh,

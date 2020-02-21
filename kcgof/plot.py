@@ -15,6 +15,7 @@ def get_func_tuples():
         (func_name used in the experiments, label name, plot line style)
     """
     func_tuples = [
+        ('met_cramer_vm', 'Cramer', 'k-3'),
         ('met_gmmd_med', 'MMD-med', 'g-+'),
         ('met_gmmd_split_med', 'MMD', 'g-<'),
 

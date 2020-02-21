@@ -1096,6 +1096,9 @@ class MMDSplitTest(CGofTest):
 
 class CramerVonMisesTest(CGofTest): 
 
+    """
+    Misspecification Testing in a Class of Conditional Distributional Models
+    """
     def __init__(self, p, n_bootstrap=100, alpha=0.01, seed=11):
         if type(p) is not cd.CDGaussianOLS:
                 raise ValueError('This method is only for Gaussian CD.')

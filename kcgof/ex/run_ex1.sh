@@ -15,12 +15,11 @@ screen -AdmS e1kcgof -t tab0 bash
 # python ex1_vary_n.py gaussls_h0_d1
 # python ex1_vary_n.py gaussls_h1_d1_easy
 python ex1_vary_n.py gaussls_h0_d5
-
-python ex1_vary_n.py g_het_dx3
 python ex1_vary_n.py quad_vs_lin_d1
+python ex1_vary_n.py g_het_dx3
+
 
 # python ex1_vary_n.py gaussls_h0_d5
-
 # python ex1_vary_n.py quad_quad_d1
 # python ex1_vary_n.py quad_vs_lin_d1
 # python ex1_vary_n.py gauss_t_d1
