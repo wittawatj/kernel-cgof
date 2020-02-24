@@ -127,7 +127,7 @@ def met_gmmd_split_med(p, rx, cond_source, n, r):
         l = kgof.kernel.KGauss(sigma2=sigy**2)
 
         # Construct an MMD test object. Require freqopttest package.
-        mmdtest = cgof.MMDSplitTest(p, k, l, n_permute=400, alpha=alpha, seed=r+37)
+        mmdtest = cgof.MMDSplitTest(p, k, l, n_permute=400, alpha=alpha, seed=r+47)
         result = mmdtest.perform_test(X, Y)
 
     return { 
@@ -501,7 +501,7 @@ method_funcs = [
     met_gfscd_J1_rand,
     # met_gmmd_med,
     met_gmmd_split_med,
-    met_cramer_vm,
+    # met_cramer_vm,
 
     # met_zhengkl_mc,
     # met_zhengkl_gh,

@@ -1016,7 +1016,7 @@ class MMDSplitTest(CGofTest):
     Note that we lose some real samples in the process.
     """
 
-    def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
+    def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=101):
         # logging.warning(('This test does not accept Pytorch '
         #                  'kernels starting with prefix PT'))
         super(MMDSplitTest, self).__init__(p, alpha)
@@ -1059,7 +1059,7 @@ class MMDSplitTest(CGofTest):
         ds_p = self.ds_p
         mmdtest = self.mmdtest
         # split the data
-        X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+33)
+        X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+330)
 
         # Draw sample from p
         Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)
@@ -1077,7 +1077,7 @@ class MMDSplitTest(CGofTest):
 
         with util.ContextTimer() as t:
             # split the data
-            X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+33)
+            X1, Y1, X2, Y2 = MMDSplitTest._split_half(X, Y, seed=self.seed+330)
 
             # Draw sample from p
             Y2_ = ds_p.cond_pair_sample(X2, seed=seed+13)
