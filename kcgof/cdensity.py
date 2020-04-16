@@ -404,7 +404,7 @@ class CDGaussianOLS(UnnormalizedCondDensity):
         super().log_den(X, Y)
         dx = self.dx()
         # https://pytorch.org/docs/stable/distributions.html#normal
-        gauss = dists.Normal(0, self.variance)
+        gauss = dists.Normal(0, self.variance**0.5)
         S = self.slope.reshape(dx, 1)
         Diff = Y - self.c - X.matmul(S)
         return gauss.log_prob(Diff)

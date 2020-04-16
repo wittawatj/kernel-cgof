@@ -668,7 +668,7 @@ class ZhengKLTest(CGofTest):
         Return: Evaluated kernel value of size n
         """
         K = torch.zeros(X.shape)
-        idx = (torch.abs(X) < 1)
+        idx = (torch.abs(X) <= 1.)
         K[idx] = 0.75 * (1 - X[idx]**2)
         return torch.prod(K, dim=-1)
 
@@ -681,11 +681,12 @@ class ZhengKLTest(CGofTest):
         """
         K = torch.zeros(Y.shape)
         weight = 1 - torch.exp(torch.tensor(-2./h))
-        pos_idx = (Y>=0) & (Y<1./h)
-        K[pos_idx] = 2.*torch.exp(-2*Y[pos_idx]) / weight
-        neg_idx = (Y<0) & (Y>-1./h)
-        K[neg_idx] = 2.*torch.exp(-2*(Y[neg_idx]+1./h)) / weight
+        pos_idx = (Y>=0) & (Y<=1./h)
+        K[pos_idx] = 2.*torch.exp(-2.*Y[pos_idx]) / weight
+        neg_idx = (Y<0) & (Y>=-1./h)
+        K[neg_idx] = 2.*torch.exp(-2.*(Y[neg_idx]+1./h)) / weight
         return torch.prod(K, dim=-1)
+
 
 class ZhengKLTestMC(ZhengKLTest):
     """ 
@@ -1105,49 +1106,52 @@ class CramerVonMisesTest(CGofTest):
         self.p = p 
         self.n_bootstrap = n_bootstrap
         self.alpha = alpha
-        self.seed =seed 
+        self.seed = seed 
    
     @staticmethod
-    def empirical_cdf(X, x):  
+    def pairwise_comparison(X, X_):  
         """
         X: n x d torch tensor 
-        x: a d-dimensional vector (1-tensor)
-        Return empirical CDF given sample X evaluated at x
+        X_: n x d torch tensor 
+        Return: a torch tensor of size n x n whose 
+        (i, j) element is indicator function of X_i <= (X_)_j
         """
-        return (1.*(X <= x).prod(dim=-1))
+        return (1.*(X <= X_.unsqueeze(1)).prod(dim=-1)).T
 
     @staticmethod
-    def prod_empirical_cdf(X, Y):
+    def Hn(X, Y, X_, Y_):
         """
         X: n x d torch tensor 
         Y: n x d torch tensor 
-        Return the product CDF given sample X evaluated at x (size n)
+        X: n x d torch tensor 
+        Return: torch tensor of size n whose ith element is the empirical joint CDF 
+        evaluated at X_i and Y_i
         """
         n = X.shape[0]
-        Xpart = 1. * (X <= X.unsqueeze(1)).prod(dim=-1)
-        Ypart = 1. * (Y <= Y.unsqueeze(1)).prod(dim=-1)
+        Xpart = CramerVonMisesTest.pairwise_comparison(X, X_)
+        Ypart = CramerVonMisesTest.pairwise_comparison(Y, Y_)
         return torch.mean(Xpart * Ypart, dim=0)
 
-    def Hn0(self, X, Y):
+    def Hn0(self, X, Y, X_, Y_):
         n = X.shape[0]
         p = self.p 
         mean = X @ p.slope + p.c
         std = self.p.variance**0.5
-        Hn0 = torch.empty(n, n)
+        Hn0 = torch.zeros(n, n)
 
         norms = [dists.Normal(mean[i], std * torch.eye(p.dy()))
                  for i in range(n)]
         for j in range(n):
             norm = norms[j]
-            Hn0[:, j] = norm.cdf(Y).squeeze()
-        Hn0 *= CramerVonMisesTest.empirical_cdf(X, X.unsqueeze(1))
-        Hn0 = Hn0.mean(dim=0)
+            Hn0[:, j] = norm.cdf(Y_).squeeze()
+        Hn0 *= CramerVonMisesTest.pairwise_comparison(X, X_).T
+        Hn0 = Hn0.mean(dim=1)
         return Hn0
 
     def compute_stat(self, X, Y): 
         n = X.shape[0]
-        Hn = (CramerVonMisesTest.prod_empirical_cdf(X, Y))
-        Hn0 = self.Hn0(X, Y)
+        Hn = (CramerVonMisesTest.Hn(X, Y, X, Y))
+        Hn0 = self.Hn0(X, Y, X, Y)
         return torch.sum((Hn - Hn0)**2)
 
     def perform_test(self, X, Y):
@@ -1167,9 +1171,9 @@ class CramerVonMisesTest(CGofTest):
                         X_ = X[idx]
                         Y_ = ds.cond_pair_sample(X_, self.seed+i)
                         # Bootstrapped statistic
-                        Hn_ = (CramerVonMisesTest.prod_empirical_cdf(X_, Y_))
-                        Hn0_ = self.Hn0(X_, Y_)
-                        boot_stat = torch.sum((Hn_ - Hn0_)**2)
+                        Hnb = CramerVonMisesTest.Hn(X_, Y_, X, Y)
+                        Hn0b = self.Hn0(X_, Y_, X, Y)
+                        boot_stat = torch.sum((Hnb - Hn0b)**2)
                         sim_stats[i] = boot_stat
  
             # approximate p-value with the permutations 
