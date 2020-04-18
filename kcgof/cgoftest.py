@@ -687,10 +687,6 @@ class ZhengKLTest(CGofTest):
         K[neg_idx] = 2.*torch.exp(-2.*(Y[neg_idx]+1./h)) / weight
         return torch.prod(K, dim=-1)
 
-    @staticmethod
-    def logistic(X):
-        return 1. / (1.+torch.exp(-X))
-
 
 class ZhengKLTestMC(ZhengKLTest):
     """ 
@@ -722,9 +718,9 @@ class ZhengKLTestMC(ZhengKLTest):
         """
         n, dx = X.shape
         dy = Y.shape[1]
-        Z = ZhengKLTest.logistic(Y)
+        Z = torch.sigmoid(Y)
         if h is None:
-           #h = n**((self.rate-1.)/(dx+dy))
+           # h = n**((self.rate-1.)/(dx+dy))
            h = torch.std(X, dim=0).mean() * n**((self.rate-1.)/(dx+dy))
         p = self.p
         # requires a CondSource
@@ -747,10 +743,11 @@ class ZhengKLTestMC(ZhengKLTest):
             int_results = np.empty([Y.shape[0], X.shape[0]])
             # TODO: What should the integral width be? Depends on h?
             n = Y.shape[0]
-            Z = ZhengKLTest.logistic(Y)
+            # Z = ZhengKLTest.logistic(Y)
+            Z = torch.sigmoid(Y)
             for i in range(n):
                 for j in range(i, n):
-                    if torch.abs(K1[i, j]) <= 1e-10: # 0
+                    if torch.abs(K1[i, j]) <= 1e-7: # 0
                         int_results[i, j] = 0.0
                         int_results[j, i] = 0.0
 
@@ -760,7 +757,7 @@ class ZhengKLTestMC(ZhengKLTest):
                         XXj = X[j].reshape(1, dx).repeat(n_sample, 1)
                         # sample
                         YYj = cs(XXj, seed=587)
-                        ZZj = ZhengKLTest.logistic(YYj)
+                        ZZj = torch.sigmoid(YYj)
                         KZZj = self.ky((Z[i] - ZZj)/h, h)
                         int_mc = torch.mean(KZZj)
 
@@ -1108,6 +1105,7 @@ class CramerVonMisesTest(CGofTest):
     """
     Misspecification Testing in a Class of Conditional Distributional Models
     """
+
     def __init__(self, p, n_bootstrap=100, alpha=0.01, seed=11):
         if type(p) is not cd.CDGaussianOLS:
                 raise ValueError('This method is only for Gaussian CD.')
@@ -1133,7 +1131,7 @@ class CramerVonMisesTest(CGofTest):
         Y: n x d torch tensor 
         X: n x d torch tensor 
         Return: torch tensor of size n whose ith element is the empirical joint CDF 
-        evaluated at X_i and Y_i
+        constructed from X, Y and evaluated at X_ and Y_
         """
         n = X.shape[0]
         Xpart = CramerVonMisesTest.pairwise_comparison(X, X_)
@@ -1172,7 +1170,6 @@ class CramerVonMisesTest(CGofTest):
             test_stat = self.compute_stat(X, Y)
             # bootstrapping
             sim_stats = torch.zeros(n_bootstrap)
-            Hn0 = self.Hn0(X, Y, X, Y)
             with torch.no_grad():
                 with util.TorchSeedContext(seed=self.seed):
                     for i in range(n_bootstrap):
@@ -1190,8 +1187,8 @@ class CramerVonMisesTest(CGofTest):
             pvalue = torch.mean(I.type(torch.float)).item()
  
         results = {'alpha': self.alpha, 'pvalue': pvalue, 
-            'test_stat': test_stat.item(),
-                 'h0_rejected': pvalue < alpha, 'n_simulate': n_bootstrap,
-                 'time_secs': t.secs, 
-                 }
+                   'test_stat': test_stat.item(),
+                   'h0_rejected': pvalue < alpha, 'n_simulate': n_bootstrap,
+                   'time_secs': t.secs,
+                   }
         return results
