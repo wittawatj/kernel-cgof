@@ -519,7 +519,7 @@ class ZhengKLTest(CGofTest):
         ky: smoothing kernel function for output variables. Default is Zheng's kernel.
     """
 
-    def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
+    def __init__(self, p, alpha, kx=None, ky=None, rate=0.2):
         super(ZhengKLTest, self).__init__(p, alpha)
         if p.dy() != 1:
             raise ValueError(('this test can be used only '
@@ -621,7 +621,7 @@ class ZhengKLTest(CGofTest):
         # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
-        K /= torch.exp(log_den).reshape(1, -1)
+        K /= torch.exp(log_den)
 
         var = K1**2
         var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
@@ -680,12 +680,16 @@ class ZhengKLTest(CGofTest):
         Return: kernel evaluated at Y of size n
         """
         K = torch.zeros(Y.shape)
-        weight = 1 - torch.exp(torch.tensor(-2./h))
-        pos_idx = (Y>=0) & (Y<=1./h)
+        weight = 1 - torch.exp(-2./h)
+        pos_idx = ((Y>=0) & (Y<=1./h)).prod(dim=-1).bool()
         K[pos_idx] = 2.*torch.exp(-2.*Y[pos_idx]) / weight
-        neg_idx = (Y<0) & (Y>=-1./h)
+        neg_idx = ((Y<0) & (Y>=-1./h)).prod(dim=-1).bool()
         K[neg_idx] = 2.*torch.exp(-2.*(Y[neg_idx]+1./h)) / weight
         return torch.prod(K, dim=-1)
+
+    @staticmethod
+    def logistic(X):
+        return 1. / (1.+torch.exp(-X))
 
 
 class ZhengKLTestMC(ZhengKLTest):
@@ -697,7 +701,7 @@ class ZhengKLTestMC(ZhengKLTest):
 
     This Monte Carlo version is done to speed up.
     """
-    def __init__(self, p, alpha, n_mc=2000, kx=None, ky=None, rate=0.5, verbose=False):
+    def __init__(self, p, alpha, n_mc=2000, kx=None, ky=None, rate=0.2, verbose=False):
         """
         n_mc: number of samples to use for the Monte Carlo integration
         verbose: if true, print debugging information.
@@ -718,8 +722,10 @@ class ZhengKLTestMC(ZhengKLTest):
         """
         n, dx = X.shape
         dy = Y.shape[1]
+        Z = ZhengKLTest.logistic(Y)
         if h is None:
-           h = n**((self.rate-1.)/(dx+dy))
+           #h = n**((self.rate-1.)/(dx+dy))
+           h = torch.std(X, dim=0).mean() * n**((self.rate-1.)/(dx+dy))
         p = self.p
         # requires a CondSource
         cs = p.get_condsource()
@@ -727,7 +733,7 @@ class ZhengKLTestMC(ZhengKLTest):
         # K1: n x n
         K1 = self.kx((X.unsqueeze(1)-X)/h)
         # print(K2)
-        K2 = self.ky((Y.unsqueeze(1)-Y)/h, h)
+        K2 = self.ky((Z.unsqueeze(1)-Z)/h, h)
 
         def vec_montecarlo(K1, Y, X, h, n_sample):
             """
@@ -741,10 +747,11 @@ class ZhengKLTestMC(ZhengKLTest):
             int_results = np.empty([Y.shape[0], X.shape[0]])
             # TODO: What should the integral width be? Depends on h?
             n = Y.shape[0]
+            Z = ZhengKLTest.logistic(Y)
             for i in range(n):
                 for j in range(i, n):
-                    if torch.abs(K1[i, j]) <= 1e-7: # 0
-                        int_results[i,j]= 0.0
+                    if torch.abs(K1[i, j]) <= 1e-10: # 0
+                        int_results[i, j] = 0.0
                         int_results[j, i] = 0.0
 
                     else:
@@ -753,8 +760,9 @@ class ZhengKLTestMC(ZhengKLTest):
                         XXj = X[j].reshape(1, dx).repeat(n_sample, 1)
                         # sample
                         YYj = cs(XXj, seed=587)
-                        KYYj = self.ky((Y[i] - YYj)/h, h)
-                        int_mc = torch.mean(KYYj)
+                        ZZj = ZhengKLTest.logistic(YYj)
+                        KZZj = self.ky((Z[i] - ZZj)/h, h)
+                        int_mc = torch.mean(KZZj)
 
                         if self.verbose:
                             print('MC integrate: {}'.format(int_mc))
@@ -774,15 +782,15 @@ class ZhengKLTestMC(ZhengKLTest):
         # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
-        K /= torch.exp(log_den).reshape(1, -1)
+        K /= torch.exp(log_den)*(1./(1.-Z)+1./Z)
 
         var = K1**2
         var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
-        var = var / h**(dx) / (n*(n-1))
+        var = var / (h**(dx) * (n*(n-1)))
 
         stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
         # Statistic = Eq. 2.13 in Zheng 2000
-        stat *= n * h**((dx+dy)/2.0) / var**0.5
+        stat *= n * h**(-(dx+dy)/2.0) / var**0.5
         return stat
 
 
@@ -804,7 +812,7 @@ class ZhengKLTestGaussHerm(ZhengKLTest):
         ky: smoothing kernel function for output variables. Default is Zheng's kernel.
     """
 
-    def __init__(self, p, alpha, kx=None, ky=None, rate=0.5):
+    def __init__(self, p, alpha, kx=None, ky=None, rate=0.2):
         super(ZhengKLTestGaussHerm, self).__init__(p, alpha, kx, ky, rate)
         if type(p) is not cd.CDGaussianOLS:
             raise ValueError('This method is only for Gaussian CD.')
@@ -898,7 +906,7 @@ class ZhengKLTestGaussHerm(ZhengKLTest):
         # K contains values of the numerator in Eq 2.12 of Zheng 2000. n x n
         K = K1 * (K2 - integrated)
         log_den = self.p.log_normalized_den(X, Y)
-        K /= torch.exp(log_den).reshape(1, -1)
+        K /= torch.exp(log_den)
 
         var = K1**2
         var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
@@ -1164,6 +1172,7 @@ class CramerVonMisesTest(CGofTest):
             test_stat = self.compute_stat(X, Y)
             # bootstrapping
             sim_stats = torch.zeros(n_bootstrap)
+            Hn0 = self.Hn0(X, Y, X, Y)
             with torch.no_grad():
                 with util.TorchSeedContext(seed=self.seed):
                     for i in range(n_bootstrap):
