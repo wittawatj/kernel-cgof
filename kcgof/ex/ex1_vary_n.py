@@ -489,21 +489,21 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 200
+reps = 70
 
 # tests to try
 method_funcs = [ 
     met_gkssd_med,
     met_gfscd_J5_opt_tr30,
-    met_gfscd_J1_opt_tr30,
+    # met_gfscd_J1_opt_tr30,
 
     met_gfscd_J5_rand,
-    met_gfscd_J1_rand,
+    # met_gfscd_J1_rand,
     # met_gmmd_med,
     met_gmmd_split_med,
     # met_cramer_vm,
 
-    # met_zhengkl_mc,
+    met_zhengkl_mc,
     # met_zhengkl_gh,
 
     # # met_gkssd_opt_tr30,
