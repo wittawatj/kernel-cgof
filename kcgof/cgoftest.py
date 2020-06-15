@@ -69,7 +69,6 @@ class CGofTest(object):
         raise NotImplementedError()
 
 
-
 class KSSDTest(CGofTest):
     """
     Conditional goodness-of-fit test with the Kernel-Smoothed Stein
@@ -783,11 +782,11 @@ class ZhengKLTestMC(ZhengKLTest):
 
         var = K1**2
         var = 2. * (torch.sum(var)-torch.sum(torch.diag(var)))
-        var = var / (h**(dx) * (n*(n-1)))
+        var = var / (n*(n-1))
 
         stat = (torch.sum(K) - torch.sum(torch.diag(K))) / (n*(n-1))
         # Statistic = Eq. 2.13 in Zheng 2000
-        stat *= n * h**(-(dx+dy)/2.0) / var**0.5
+        stat *= n * h**((dx-dy)/2.0) / var**0.5
         return stat
 
 
@@ -1191,4 +1190,81 @@ class CramerVonMisesTest(CGofTest):
                    'h0_rejected': pvalue < alpha, 'n_simulate': n_bootstrap,
                    'time_secs': t.secs,
                    }
+        return results
+
+class ZhengCDFTest(CGofTest):
+    """
+    Zheng's test with a statistic based on a difference 
+    between empirical and model CDFs,
+    implementing "Testing parametric conditional distributions using
+    the nonparametric smoothing method". 
+
+    Currently, this class only supports
+        - CDGaussianOLS
+    The model paramter is assumed to be fixed at the best one (no estimator). 
+
+    Args:
+        CGofTest (UnnormalizedDensity): an instance of UnnormalizedDensity
+        alpha (float): significance level
+    """
+
+    def __init__(self, p, alpha):
+        super(ZhengCDFTest, self).__init__(p, alpha)
+        if type(p) is not cd.CDGaussianOLS:
+                raise ValueError('This method only supports Gaussian OLS.')
+    
+    def eval_cdf(self, X, Y):
+        """Returns a matrix whose (i, j) element is F(Y_i|X_j)
+        """
+        n = X.shape[0]
+        p = self.p 
+        mean = X @ p.slope + p.c
+        std = self.p.variance**0.5
+
+        F = torch.zeros(n, n)
+        norms = [dists.Normal(mean[i], std * torch.eye(p.dy()))
+                 for i in range(n)]
+        for j in range(n):
+            norm = norms[j]
+            F[:, j] = norm.cdf(Y).squeeze()
+        return F
+
+    def compute_stat(self, X, Y, h=None):
+        """Compute the test static
+
+        Args:
+            X (torch.Tensor): X sample 
+            Y (torch.Tensor)): Y sample 
+            h (torch.Tensor, optional): kernel bandwidth. Defaults to None.
+        """
+        n, dx = X.shape
+        if h is None:
+            std = torch.std(X, dim=0)
+            h = std * n**(-1./6)
+
+        Y_pair = CramerVonMisesTest.pairwise_comparison(Y, Y)
+        F = self.eval_cdf(X, Y)
+        k = ZhengKLTest.K1
+        KX = k((X.unsqueeze(1)-X)/h)
+        Diff = Y_pair - F.T
+
+        stat = (KX * (Diff@Diff.T)).fill_diagonal_(0.)
+        stat = torch.sum(stat)
+        stat = stat * h.prod()**(dx/2.) / (n*(n-1))
+
+        var = ((KX*(Diff@Diff.T)/n)**2).fill_diagonal_(0.)
+        var = torch.sum(var)
+        var = var * 2. / (n*(n-1)) 
+        stat = stat / var**0.5
+        return stat
+    
+    def perform_test(self, X, Y):
+        with util.ContextTimer() as t:
+            alpha = self.alpha
+            stat = self.compute_stat(X, Y)
+            pvalue = (1 - dists.Normal(0, 1).cdf(stat)).item()
+        results = {'alpha': self.alpha, 'pvalue': pvalue,
+                    'test_stat': stat.item(),
+                    'h0_rejected': pvalue < alpha, 'time_secs': t.secs,
+                    }
         return results

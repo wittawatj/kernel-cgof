@@ -21,6 +21,7 @@ def get_func_tuples():
 
         ('met_zhengkl_mc', 'Zheng MC', 'm-'),
         ('met_zhengkl_gh', 'Zheng GH', 'm--'),
+        ('met_zheng_cdf', 'Zheng CDF', 'm:'),
 
         ('met_gkssd_med', 'KSSD', 'r-'),
         ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),

@@ -415,13 +415,26 @@ def met_cramer_vm(p, rx, cond_source, n, r):
         'test_result': result, 'time_secs': t.secs}
 
 
+def met_zheng_cdf(p, rx, cond_source, n, r):
+    X, Y = sample_xy(rx, cond_source, n, r)
+    # start timing
+    with util.ContextTimer() as t:
+        # the test
+        zheng_cdf = cgof.ZhengCDFTest(p, alpha)
+        result = zheng_cdf.perform_test(X, Y)
+
+    return { 
+        # 'test': zheng_test,
+        'test_result': result, 'time_secs': t.secs}
+
+
 # Define our custom Job, which inherits from base class IndependentJob
 class Ex1Job(IndependentJob):
    
     def __init__(self, aggregator, prob_label, rep, met_func, n):
         #walltime = 60*59*24 
         walltime = 60*59
-        memory = int(n*1e-2) + 50
+        memory = 54272#int(n*1e-2) + 50
 
         IndependentJob.__init__(self, aggregator, walltime=walltime,
                                memory=memory)
@@ -471,6 +484,7 @@ from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_zhengkl_mc
 from kcgof.ex.ex1_vary_n import met_zhengkl_gh
+from kcgof.ex.ex1_vary_n import met_zheng_cdf
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J5_rand
 from kcgof.ex.ex1_vary_n import met_gfscd_J1_opt_tr30
@@ -489,7 +503,7 @@ alpha = 0.05
 # tr_proportion = 0.5
 
 # repetitions for each sample size 
-reps = 70
+reps = 300
 
 # tests to try
 method_funcs = [ 
@@ -504,6 +518,7 @@ method_funcs = [
     # met_cramer_vm,
 
     met_zhengkl_mc,
+    met_zheng_cdf,
     # met_zhengkl_gh,
 
     # # met_gkssd_opt_tr30,
