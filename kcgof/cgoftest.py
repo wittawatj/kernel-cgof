@@ -138,7 +138,6 @@ class KSSDTest(CGofTest):
             
         return results
 
-
     def _unsmoothed_ustat_kernel(self, X, Y):
         """
         Compute h_p((x,y), (x',y')) for (x,y) in X,Y.
@@ -606,7 +605,7 @@ class ZhengKLTest(CGofTest):
         n, dx = X.shape
         dy = Y.shape[1]
         if h is None:
-           h = n**((self.rate-1.)/(dx+dy))
+            h = n**((self.rate-1.)/(dx+dy))
 
         # K1: n x n
         K1 = self.kx((X.unsqueeze(1)-X)/h)
@@ -1192,6 +1191,7 @@ class CramerVonMisesTest(CGofTest):
                    }
         return results
 
+
 class ZhengCDFTest(CGofTest):
     """
     Zheng's test with a statistic based on a difference 
@@ -1201,6 +1201,7 @@ class ZhengCDFTest(CGofTest):
 
     Currently, this class only supports
         - CDGaussianOLS
+        - CDGaussianHetero
     The model paramter is assumed to be fixed at the best one (no estimator). 
 
     Args:
@@ -1210,23 +1211,52 @@ class ZhengCDFTest(CGofTest):
 
     def __init__(self, p, alpha):
         super(ZhengCDFTest, self).__init__(p, alpha)
-        if type(p) is not cd.CDGaussianOLS:
-                raise ValueError('This method only supports Gaussian OLS.')
+        if not(
+            type(p) is not cd.CDGaussianOLS
+            or type(p) is not cd.CDGaussianHetero
+        ):
+                raise ValueError(('The given density type {} is not '
+                                  'supported'.format(type(p))))
     
-    def eval_cdf(self, X, Y):
-        """Returns a matrix whose (i, j) element is F(Y_i|X_j)
-        """
+    def _handle_cdf_ols(self, X):
         n = X.shape[0]
-        p = self.p 
+        p = self.p
+        assert type(p) is cd.CDGaussianOLS
         mean = X @ p.slope + p.c
         std = self.p.variance**0.5
+        cdfs = [dists.Normal(mean[i], std).cdf
+                for i in range(n)] 
+        return cdfs
+
+    def _handle_cdf_Gausshetero(self, X):
+        n = X.shape[0]
+        p = self.p
+        assert type(p) is cd.CDGaussianHetero
+        mean = p.f(X)
+        std = torch.sqrt(p.f_variance(X))
+        cdfs = [dists.Normal(mean[i], std[i]).cdf
+                 for i in range(n)]
+        return cdfs
+
+    def _cdfs_cond_on(self, X):
+        return {
+            cd.CDGaussianOLS: self._handle_cdf_ols,
+            cd.CDGaussianHetero: self._handle_cdf_Gausshetero,
+        }.get(type(self.p), lambda x: None)(X)
+    
+    def eval_cdf(self, X, Y):
+        """Returns a matrix whose (i, j) element is CDF F(Y_i|X_j).
+        Assuming dy = 1.
+        """
+        assert self.p.dy() == 1
+
+        n = X.shape[0]
+        cdfs = self._cdfs_cond_on(X)
 
         F = torch.zeros(n, n)
-        norms = [dists.Normal(mean[i], std * torch.eye(p.dy()))
-                 for i in range(n)]
         for j in range(n):
-            norm = norms[j]
-            F[:, j] = norm.cdf(Y).squeeze()
+            cdf = cdfs[j]
+            F[:, j] = cdf(Y).squeeze()
         return F
 
     def compute_stat(self, X, Y, h=None):
@@ -1240,17 +1270,19 @@ class ZhengCDFTest(CGofTest):
         n, dx = X.shape
         if h is None:
             std = torch.std(X, dim=0)
-            h = std * n**(-1./6)
+            h = std * n**(-1./(6*dx))
 
         Y_pair = CramerVonMisesTest.pairwise_comparison(Y, Y)
         F = self.eval_cdf(X, Y)
-        k = ZhengKLTest.K1
+        #k = ZhengKLTest.K1
+        from math import pi
+        k = lambda X: (2.*pi)**(-dx/2.) * torch.exp(-torch.sum(X**2, dim=-1)/2.)
         KX = k((X.unsqueeze(1)-X)/h)
         Diff = Y_pair - F.T
 
         stat = (KX * (Diff@Diff.T)).fill_diagonal_(0.)
         stat = torch.sum(stat)
-        stat = stat * h.prod()**(dx/2.) / (n*(n-1))
+        stat = stat * h.prod()**0.5 / (n*(n-1))
 
         var = ((KX*(Diff@Diff.T)/n)**2).fill_diagonal_(0.)
         var = torch.sum(var)

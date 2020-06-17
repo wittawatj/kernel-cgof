@@ -70,7 +70,7 @@ class RXIsotropicGaussian(DistX):
         return torch.randn(n, self.dx)
         
 
-class UnnormalizedCondDensity( object):
+class UnnormalizedCondDensity(object):
     """
     An abstract class of an unnormalized conditional probability density
     function. This is intended to be used to represent a condiitonal model of
@@ -316,6 +316,7 @@ class CDGaussianHetero(UnnormalizedCondDensity):
 
     def dy(self):
         return 1
+
 
 class CDAdditiveNoiseRegression(UnnormalizedCondDensity):
     """
