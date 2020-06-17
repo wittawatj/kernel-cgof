@@ -195,7 +195,7 @@ class PTKGauss(KCSTKernel,
         X: nx x d
         Y: ny x d
 
-        Return a numpy array of size nx x ny.
+        Return a Torch tensor of size nx x ny.
         """
         sigma2 = self.sigma2
         K = self.eval(X, Y)
@@ -211,7 +211,7 @@ class PTKGauss(KCSTKernel,
         X: nx x d
         Y: ny x d
 
-        Return a numpy array of size nx x ny.
+        Return a Torch tensor of size nx x ny.
         """
         return -self.gradX_Y(X, Y, dim)
 
@@ -223,7 +223,7 @@ class PTKGauss(KCSTKernel,
         X: nx x d numpy array.
         Y: ny x d numpy array.
 
-        Return a nx x ny numpy array of the derivatives.
+        Return a nx x ny Torch tensor of the derivatives.
         """
         (n1, d1) = X.shape
         (n2, d2) = Y.shape
