@@ -204,7 +204,7 @@ def plot_2d_cond_model(p, px, X, Y, domX, domY, figsize=(10, 6), height_ratios=[
     # ax1.set_xticklabels([])
     npX = X.detach().numpy()
     npY = Y.detach().numpy()
-    ax1.plot(npX, npY, 'bo', markersize=4)
+    ax1.plot(npX, npY, 'bo', markersize=3)
     ax1.set_ylabel('$p(y|x)$')
     # ax1.grid(True)
     # plt.colorbar()
