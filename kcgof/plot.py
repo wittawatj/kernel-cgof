@@ -17,15 +17,15 @@ def get_func_tuples():
     func_tuples = [
         ('met_cramer_vm', 'Cramer', 'k-3'),
         ('met_gmmd_med', 'MMD-med', 'g-+'),
-        ('met_gmmd_split_med', 'MMD', 'g-<'),
+        ('met_gmmd_split_med', 'MMD', 'y-s'),
 
         ('met_zhengkl_mc', 'Zheng MC', 'm-'),
         ('met_zhengkl_gh', 'Zheng GH', 'm--'),
-        ('met_zheng_cdf', 'Zheng CDF', 'm:'),
+        ('met_zheng_cdf', 'Zheng CDF', 'g:^'),
 
-        ('met_gkssd_med', 'KSSD', 'r-'),
-        ('met_gkssd_opt_tr30', 'KSSD-opt 30tr', 'r-2'),
-        ('met_gkssd_opt_tr50', 'KSSD-opt 50tr', 'r-^'),
+        ('met_gkssd_med', 'KCSD', 'r-'),
+        ('met_gkssd_opt_tr30', 'KCSD-opt 30tr', 'r-2'),
+        ('met_gkssd_opt_tr50', 'KCSD-opt 50tr', 'r-^'),
         
         ('met_gfscd_J1_rand', 'FSCD-rand J1', 'c--D'),
         ('met_gfscd_J5_rand', 'FSCD-rand J5', 'k-.<'),
@@ -136,7 +136,7 @@ def plot_prob_reject(ex, fname, func_xvalues, xlabel, func_title=None,
         #plt.errorbar(ns*te_proportion, mean_rejs[:, i], std_pvals[:, i])
         method_label = method_labels[func_names[i]]
         plotted_methods.append(method_label)
-        plt.plot(xvalues, mean_rejs[:, i], fmt, label=method_label)
+        plt.plot(xvalues, mean_rejs[:, i], fmt, label=method_label, markersize=8)
     '''
     else:
         # h0 is true 

@@ -397,10 +397,6 @@ def met_zhengkl(p, rx, cond_source, n, r):
 
 def met_cramer_vm(p, rx, cond_source, n, r):
     """
-    KSSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
-    med = Use median heuristic to choose the bandwidths for both kernels.
-    Compute the median heuristic on the data X and Y separate to get the two
-    bandwidths.
     """
     X, Y = sample_xy(rx, cond_source, n, r)
 
