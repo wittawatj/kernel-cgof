@@ -18,23 +18,30 @@ import warnings
 def warn_bounded_domain(self):
     log.l().warning('{} has a bounded domain. This may have an unintended effect to the test result'.format(self.__class__) )
 
-# def from_log_den(d, f):
-#     """
-#     Construct an UnnormalizedDensity from the function f, implementing the log 
-#     of an unnormalized density.
+def from_log_den(dx, dy, f):
+    """
+    Construct an UnnormalizedCondDensity from the function f, implementing the log 
+    of an unnormalized conditional density.
 
-#     f: X -> den where X: n x d and den is a numpy array of length n.
-#     """
-#     return UDFromCallable(d, flog_den=f)
+    Args:
+    - dx: the dimension of x
+    - dy: the dimension of y
+    - f: (X,Y) -> den where X: n x dx, Y: n x dy Torch tensors, and den is a Torch array of length n.
+    """
+    return UCDFromCallable(dx, dy, flog_den=f)
 
-# def from_grad_log(d, g):
-#     """
-#     Construct an UnnormalizedDensity from the function g, implementing the
-#     gradient of the log of an unnormalized density.
+def from_grad_log(dx, dy, g):
+    """
+    Construct an UnnormalizedDensity from the function g, implementing the
+    gradient of the log of an unnormalized density.
 
-#     g: X -> grad where X: n x d and grad is n x d (2D numpy array)
-#     """
-#     return UDFromCallable(d, fgrad_log=g)
+    Args:
+    - dx: the dimension of x
+    - dy: the dimension of y
+    - g: (X,Y) -> \grad_y p(x,y) where X: n x dx, Y: n x dy Torch tensors,
+        and the computed gradient is n x dy (2D Torch array)
+    """
+    return UCDFromCallable(dx, dy, fgrad_log=g)
 
 class DistX(object):
     """
@@ -69,6 +76,7 @@ class RXIsotropicGaussian(DistX):
     def sample(self, n):
         return torch.randn(n, self.dx)
         
+
 
 class UnnormalizedCondDensity(object):
     """
@@ -172,6 +180,58 @@ class UnnormalizedCondDensity(object):
         raise NotImplementedError()
 
 # end UnnormalizedCondDensity
+
+
+class UCDFromCallable(UnnormalizedCondDensity):
+    """
+    UnnormalizedCondDensity constructed from the specified implementations of 
+    log_den() and grad_log() as callable objects.
+    """
+    def __init__(self, dx, dy, flog_den=None, fgrad_log=None):
+        """
+        Only one of log_den and grad_log are required.
+        If log_den is specified, the gradient is automatically computed.
+
+        - dx: dimension of x in the model p(y|x)
+        - dy: dimension of y in the model p(y|x)
+        - log_den: a callable object (function) implementing the log of an
+            unnormalized conditional density. See UnnormalizedCondDensity.log_den.
+        - grad_log: a callable object (function) implementing the gradient of
+            the log of an unnormalized conditional density.
+        """
+        if flog_den is None and fgrad_log is None:
+            raise ValueError('At least one of {log_den, grad_log} must be specified.')
+        assert dx >= 1
+        assert dy >= 1
+        self._dx = dx
+        self._dy = dy
+        self.flog_den = flog_den
+        self.fgrad_log = fgrad_log
+
+    def log_den(self, X, Y):
+        flog_den = self.flog_den
+        if flog_den is None:
+            raise ValueError('log_den callable object is None.')
+        return flog_den(X, Y)
+
+    def grad_log(self, X, Y):
+        fgrad_log = self.fgrad_log
+        if fgrad_log is None:
+            # Automatically compute the gradient
+            G = super().grad_log(X, Y)
+        else:
+            # fgrad_log is given in the constructor. Use it.
+            G = fgrad_log(X, Y)
+        return G
+
+    def dx(self):
+        return self._dx
+
+    def dy(self):
+        return self._dy
+
+# end UCDFromCallable
+
 
 class CDMixtureDensityNetwork(UnnormalizedCondDensity):
     """
