@@ -80,7 +80,7 @@ class UnnormalizedCondDensity(object):
     specifies p(y,x) since p(y|x) = p(y,x)/p(x), and p(x) is the normalizer.
     The normalizer of the joint density is not assumed to be known.
 
-    The KSSD and FSCD Stein-based tests only require grad_log(..). Subclasses
+    The KCSD and FSCD Stein-based tests only require grad_log(..). Subclasses
     can implement either log_den(..) or grad_log(..). If log_den(..) is
     implemented, grad_log(...) will be implemented automatically with
     torch.autograd functions. 

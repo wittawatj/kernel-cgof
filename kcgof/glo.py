@@ -38,23 +38,6 @@ def get_torch_device():
     """
     return _get_key_from_default_config('torch_device')
 
-# def data_folder():
-#     """
-#     Return the full path to the data folder 
-#     """
-#     import kcgof.config as config
-#     data_path = config.resource_configs['data_path']
-#     return data_path
-#     #return os.path.join(get_root(), 'data')
-
-# def data_file(*relative_path):
-#     """
-#     Access the file under the data folder. The path is relative to the 
-#     data folder
-#     """
-#     dfolder = data_folder()
-#     return os.path.join(dfolder, *relative_path)
-
 def shared_resource_folder(*relative_path):
     """
     Return the full path to the shared resource folder.
@@ -64,9 +47,6 @@ def shared_resource_folder(*relative_path):
         path = os.path.join(path, *relative_path)
     return path
 
-# def load_data_file(*relative_path):
-#     fpath = data_file(*relative_path)
-#     return pickle_load(fpath)
 
 def ex_result_folder(ex):
     """Return the full path to the folder containing result files of the specified 

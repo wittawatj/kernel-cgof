@@ -126,9 +126,7 @@ class PTKTestLocations(Kernel):
         return Kvec
 
 
-class PTKGauss(KCSTKernel, 
-# HasTunableParams
-):
+class PTKGauss(KCSTKernel):
     """
     Pytorch implementation of the isotropic Gaussian kernel.
     Parameterization is the same as in the density of the standard normal

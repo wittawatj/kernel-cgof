@@ -69,10 +69,10 @@ class CGofTest(object):
         raise NotImplementedError()
 
 
-class KSSDTest(CGofTest):
+class KCSDTest(CGofTest):
     """
-    Conditional goodness-of-fit test with the Kernel-Smoothed Stein
-    Discrepancy (KSSD).
+    Conditional goodness-of-fit test with the Kernel Conditional Stein
+    Discrepancy (KCSD).
     Test statistic is n*U-statistic.
     This test runs in O(n^2 d^2) time.
 
@@ -92,7 +92,7 @@ class KSSDTest(CGofTest):
         n_bootstrap: The number of times to simulate from the null distribution
             by bootstrapping. Must be a positive integer.
         """
-        super(KSSDTest, self).__init__(p, alpha)
+        super(KCSDTest, self).__init__(p, alpha)
         self.k = k
         self.l = l
         self.n_bootstrap = n_bootstrap
@@ -164,7 +164,7 @@ class KSSDTest(CGofTest):
 
     def compute_stat(self, X, Y, return_ustat_gram=False):
         """
-        Compute n x the U-statistic estimator of KSSD.
+        Compute n x the U-statistic estimator of KCSD.
 
         return_ustat_gram: If true, then return the n x n matrix used to
             compute the statistic 
@@ -175,8 +175,6 @@ class KSSDTest(CGofTest):
         h = self._unsmoothed_ustat_kernel(X, Y)
         # smoothing 
         K = k.eval(X, X)
-        # TODO: Wittawat: K*h then sum, this is the same as forming a quadratic
-        # form.
         H = K*h
         # U-statistic
         ustat = (torch.sum(H) - torch.sum(torch.diag(H)) )/(n*(n-1))
@@ -186,9 +184,9 @@ class KSSDTest(CGofTest):
         else:
             return stat
 
-class KSSDPowerCriterion(object):
+class KCSDPowerCriterion(object):
     """
-    Implement the power criterion of the KSSD test for parameter tuning of the test.
+    Implement the power criterion of the KCSD test for parameter tuning of the test.
     Related: see also FSCDPowerCriterion.
     """
     def __init__(self, p, k, l, X, Y):
@@ -203,13 +201,13 @@ class KSSDPowerCriterion(object):
         self.l = l
         self.X = X
         self.Y = Y
-        self.kssdtest = KSSDTest(p, k, l)
+        self.kcsdtest = KCSDTest(p, k, l)
     
     def optimize_params(self, params, lr, constraint_f=None, reg=1e-4,
         max_iter=500):
         """
         Optimize parameters in the list params by maximizing the power
-        criterion of the KSSD test. This method modifies the state of this
+        criterion of the KCSD test. This method modifies the state of this
         object (specifically, parameters in k, l).
 
         - params:  a list of torch.Tensor s or dict s.
@@ -256,25 +254,25 @@ class KSSDPowerCriterion(object):
 
     def _point_power_criterion(self, reg=1e-5):
         """
-        Evaluate the regularized power criterion of KSSD test using the
+        Evaluate the regularized power criterion of KCSD test using the
         specified kernels and data.
         The objective is mean_under_H1 / (reg + standard deviation under H1)
 
         reg: a non-negative scalar specifying the regularization parameter
         """
-        kssdtest = self.kssdtest
+        kcsdtest = self.kcsdtest
         k = self.k
 
-        h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+        h = kcsdtest._unsmoothed_ustat_kernel(self.X, self.Y)
         n = h.shape[0]
         K = k.eval(self.X, self.X)
         # standard deviation under H1.
         hK = h*K
         sigma_h1 = 2.0*torch.std(torch.mean(hK, 1))
 
-        # compute biased KSSD 
-        kssd_biased = torch.mean(hK)
-        power_cri = kssd_biased/(sigma_h1 + reg)
+        # compute biased KCSD 
+        kcsd_biased = torch.mean(hK)
+        power_cri = kcsd_biased/(sigma_h1 + reg)
         return power_cri
 
 class FSCDPowerCriterion(object):
@@ -284,7 +282,7 @@ class FSCDPowerCriterion(object):
     The witness function is real-valued and is defined as 
     v |-> || G(v) ||^2
     where G is the RKHS-valued function such that its squared RKHS norm
-    defines the KSSD statistic. The witness is supposed to be a zero function
+    defines the KCSD statistic. The witness is supposed to be a zero function
     under H0. In practice, G has to be estimated from the data.
 
     High power criterion indicates a poor fit of the model on the data.
@@ -301,11 +299,11 @@ class FSCDPowerCriterion(object):
         self.l = l
         self.X = X
         self.Y = Y
-        self.kssdtest = KSSDTest(p, k, l)
+        self.kcsdtest = KCSDTest(p, k, l)
     
     def eval_witness(self, at):
         """
-        Evaluate the biased estimate of the witness function of KSSD/FSCD.
+        Evaluate the biased estimate of the witness function of KCSD/FSCD.
 
         at: Torch tensor of size m x dx specifying m locations to evaluate 
             the witness function. The witness function is evaluated at each
@@ -404,10 +402,10 @@ class FSCDPowerCriterion(object):
 
         reg: a non-negative scalar specifying the regularization parameter
         """
-        kssdtest = self.kssdtest
+        kcsdtest = self.kcsdtest
         k = self.k
 
-        h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+        h = kcsdtest._unsmoothed_ustat_kernel(self.X, self.Y)
         n = h.shape[0]
         J, dx = V.shape
 
@@ -429,10 +427,10 @@ class FSCDPowerCriterion(object):
     #     Evaluate the standard deviation of the the distribution of FSCD under H1.
     #     Use V as the set of J test locations.
     #     """
-    #     kssdtest = self.kssdtest
+    #     kcsdtest = self.kcsdtest
     #     k = self.k
 
-    #     h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+    #     h = kcsdtest._unsmoothed_ustat_kernel(self.X, self.Y)
     #     n = h.shape[0]
     #     J, dx = V.shape
 
@@ -450,10 +448,10 @@ class FSCDPowerCriterion(object):
         This is the version with a for loop.
         Use eval_witness(.)
         """
-        kssdtest = self.kssdtest
+        kcsdtest = self.kcsdtest
         # TODO: h can be cached if needed. But it may consume a lot of memory
         # (n x n)
-        h = kssdtest._unsmoothed_ustat_kernel(self.X, self.Y)
+        h = kcsdtest._unsmoothed_ustat_kernel(self.X, self.Y)
         n = h.shape[0]
         # remove bias (diagonal)
         # h = h - torch.diagflat(torch.diag(h))
@@ -470,7 +468,7 @@ class FSCDPowerCriterion(object):
         return wit_values
 
 
-class FSCDTest(KSSDTest):
+class FSCDTest(KCSDTest):
     """
     Conditional goodness-of-fit test with the Finite Set Conditional
     Discrepancy (FSCD).

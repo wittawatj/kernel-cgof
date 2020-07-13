@@ -134,9 +134,9 @@ def met_gmmd_split_med(p, rx, cond_source, n, r):
         # 'test': mmdtest,
         'test_result': result, 'time_secs': t.secs}
 
-def met_gkssd_med(p, rx, cond_source, n, r):
+def met_gkcsd_med(p, rx, cond_source, n, r):
     """
-    KSSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
+    KCSD test with Gaussian kernels (for both kernels). Prefix g = Gaussian kernel.
     med = Use median heuristic to choose the bandwidths for both kernels.
     Compute the median heuristic on the data X and Y separate to get the two
     bandwidths.
@@ -155,22 +155,22 @@ def met_gkssd_med(p, rx, cond_source, n, r):
         # l = kernel on Y
         l = ker.PTKGauss(sigma2=sigy**2)
 
-        # Construct a KSSD test object
-        kssdtest = cgof.KSSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
-        result = kssdtest.perform_test(X, Y)
+        # Construct a KCSD test object
+        kcsdtest = cgof.KCSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
+        result = kcsdtest.perform_test(X, Y)
 
     return { 
-        # 'test': kssdtest,
+        # 'test': kcsdtest,
         'test_result': result, 'time_secs': t.secs}
 
-def met_gkssd_opt_tr30(p, rx, cond_source, n, r):
-    return met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.3)
+def met_gkcsd_opt_tr30(p, rx, cond_source, n, r):
+    return met_gkcsd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.3)
 
-def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
+def met_gkcsd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
     """
-    KSSD test with Gaussian kernels (for both kernels). 
+    KCSD test with Gaussian kernels (for both kernels). 
     Optimize the kernel bandwidths by maximizing the power criterin of the
-    KSSD test.
+    KCSD test.
     med = Use median heuristic to choose the bandwidths for both kernels.
     Compute the median heuristic on the data X and Y separate to get the two
     bandwidths.
@@ -198,7 +198,7 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
         # abs_stdx = torch.std(Xtr).item()
         # abs_stdy = torch.std(Ytr).item()
 
-        kssd_pc = cgof.KSSDPowerCriterion(p, k, l, Xtr, Ytr)
+        kcsd_pc = cgof.KCSDPowerCriterion(p, k, l, Xtr, Ytr)
 
         max_iter = 100
         # learning rate 
@@ -213,18 +213,18 @@ def met_gkssd_opt_tr50(p, rx, cond_source, n, r, tr_proportion=0.5):
             ksigma2.data.clamp_(min=1e-1, max=10*sigx**2)
             lsigma2.data.clamp_(min=1e-1, max=10*sigy**2)
         
-        kssd_pc.optimize_params(
+        kcsd_pc.optimize_params(
             [k.sigma2, l.sigma2], constraint_f=con_f,
             lr=lr, reg=reg, max_iter=max_iter)
 
-        # Construct a KSSD test object
-        kssdtest = cgof.KSSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
+        # Construct a KCSD test object
+        kcsdtest = cgof.KCSDTest(p, k, l, alpha=alpha, n_bootstrap=400, seed=r+88)
         Xte, Yte = te.xy()
         # test on the test set
-        result = kssdtest.perform_test(Xte, Yte)
+        result = kcsdtest.perform_test(Xte, Yte)
 
     return { 
-        # 'test': kssdtest,
+        # 'test': kcsdtest,
         'test_result': result, 'time_secs': t.secs}
 
 def met_gfscd_J5_rand(p, rx, cond_source, n, r):
@@ -407,7 +407,7 @@ def met_cramer_vm(p, rx, cond_source, n, r):
         result = cvm.perform_test(X, Y)
 
     return { 
-        # 'test': kssdtest,
+        # 'test': kcsdtest,
         'test_result': result, 'time_secs': t.secs}
 
 
@@ -471,12 +471,12 @@ class Ex1Job(IndependentJob):
 # This import is needed so that pickle knows about the class Ex1Job.
 # pickle is used when collecting the results from the submitted jobs.
 from kcgof.ex.ex1_vary_n import Ex1Job
-from kcgof.ex.ex1_vary_n import met_gkssd_med
+from kcgof.ex.ex1_vary_n import met_gkcsd_med
 from kcgof.ex.ex1_vary_n import met_cramer_vm
 from kcgof.ex.ex1_vary_n import met_gmmd_med
 from kcgof.ex.ex1_vary_n import met_gmmd_split_med
-from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr50
-from kcgof.ex.ex1_vary_n import met_gkssd_opt_tr30
+from kcgof.ex.ex1_vary_n import met_gkcsd_opt_tr50
+from kcgof.ex.ex1_vary_n import met_gkcsd_opt_tr30
 from kcgof.ex.ex1_vary_n import met_zhengkl
 from kcgof.ex.ex1_vary_n import met_zhengkl_mc
 from kcgof.ex.ex1_vary_n import met_zhengkl_gh
@@ -503,7 +503,7 @@ reps = 300
 
 # tests to try
 method_funcs = [ 
-    met_gkssd_med,
+    met_gkcsd_med,
     met_gfscd_J5_opt_tr30,
     # met_gfscd_J1_opt_tr30,
 
@@ -517,8 +517,8 @@ method_funcs = [
     met_zheng_cdf,
     # met_zhengkl_gh,
 
-    # # met_gkssd_opt_tr30,
-    # # met_gkssd_opt_tr50,
+    # # met_gkcsd_opt_tr30,
+    # # met_gkcsd_opt_tr50,
     # # met_zhengkl,
     # met_gfscd_J1_opt_tr50,
     # met_gfscd_J5_opt_tr50,

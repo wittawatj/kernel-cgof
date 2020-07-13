@@ -23,9 +23,9 @@ def get_func_tuples():
         ('met_zhengkl_gh', 'Zheng GH', 'm--'),
         ('met_zheng_cdf', 'Zheng CDF', 'g:^'),
 
-        ('met_gkssd_med', 'KCSD', 'r-'),
-        ('met_gkssd_opt_tr30', 'KCSD-opt 30tr', 'r-2'),
-        ('met_gkssd_opt_tr50', 'KCSD-opt 50tr', 'r-^'),
+        ('met_gkcsd_med', 'KCSD', 'r-'),
+        ('met_gkcsd_opt_tr30', 'KCSD-opt 30tr', 'r-2'),
+        ('met_gkcsd_opt_tr50', 'KCSD-opt 50tr', 'r-^'),
         
         ('met_gfscd_J1_rand', 'FSCD-rand J1', 'c--D'),
         ('met_gfscd_J5_rand', 'FSCD-rand J5', 'k-.<'),
@@ -35,28 +35,7 @@ def get_func_tuples():
         ('met_gfscd_J5_opt_tr50', 'FSCD-opt J5 50tr', 'b-s'),
 
         ('met_zhengkl', 'Zheng', 'm-x'),
-        # ('met_gumeJ5_3sopt_tr20', 'Rel-UME J5', 'r-^'),
-        # ('met_gfssdJ1_3sopt_tr20', 'Rel-FSSD J1', 'C4--'),
-        # ('met_gfssdJ5_3sopt_tr20', 'Rel-FSSD J5', 'b-x'),
 
-        # ('met_gmmd_med', 'Rel-MMD', 'k-.'),
-        # ('met_gmmd_med_bounliphone', 'Rel-MMD medboun', 'k-'),
-
-        # ('met_gfssdJ1_3sopt_tr50', 'FSSD-opt3 J1', 'b-^'),
-        # ('met_gfssdJ5_3sopt_tr50', 'FSSD-opt3 J5', 'b-.h'),
-
-        # ('met_gumeJ1_2V_rand', 'UME-rand J1', 'r--^'),
-        # ('met_gumeJ1_1V_rand', 'UME-rand J1 1V', 'y-'),
-        # ('met_gumeJ2_2V_rand', 'UME-rand J2', 'g--^'),
-        # ('met_gumeJ3_2V_rand', 'UME-rand J3', 'b--^'),
-        # ('met_gumeJ5_2V_rand', 'UME-rand J5', 'k--^'),
-
-        # ('met_gumeJ1_2sopt_tr20', 'Rel-UME-opt2 J1', 'C2-.'),
-        # ('met_gumeJ5_2sopt_tr20', 'Rel-UME-opt2 J5', 'g-'),
-        # ('met_gumeJ1_2sopt_tr50', 'Rel-UME-opt2 J1', 'r-.h'),
-
-        # ('met_gumeJ1_3sopt_tr50', 'UME-opt3 J1', 'r-'),
-        # ('met_gumeJ5_3sopt_tr50', 'UME-opt3 J5', 'k-'),
         ]
     return func_tuples
 
@@ -222,8 +201,6 @@ def plot_2d_cond_model(p, px, X, Y, domX, domY, figsize=(10, 6), height_ratios=[
     ax2.set_xlabel('$x$')
     # plt.legend()
     return f, axes
-
-
 
 def plot_2d_cond_data(X, Y):
     """
