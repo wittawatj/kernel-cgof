@@ -24,6 +24,12 @@ goodness-of-fit testing of conditional density models as proposed in our paper
 Version numbers for everything else except `torch` should not matter much as
 long as they are not too old.
 
+## Demo
+
+See the Jupyter notebook [ipynb/demo_proposed_tests.ipynb](https://github.com/wittawatj/kernel-cgof/blob/master/ipynb/demo_proposed_tests.ipynb) for how to start using our tests. This notebook describes how to use the proposed Kernel Conditional Stein Discrepancy (KCSD) test, which is one of the two test we proposed. 
+
+A notebook that introduces the other test, the Finite Set Conditional Discrepancy (FSCD), is coming soon.
+
 ## Development
 
 We recommend [Anaconda](https://www.anaconda.com/). To install our package
