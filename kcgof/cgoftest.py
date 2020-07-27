@@ -18,8 +18,6 @@ import typing
 from scipy.integrate import quad
 import numpy as np
 import logging
-import freqopttest.tst as tst
-import freqopttest.data as fdata
 
 
 class CGofTest(object):
@@ -954,6 +952,8 @@ class MMDTest(CGofTest):
     def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=11):
         # logging.warning(('This test does not accept Pytorch '
         #                  'kernels starting with prefix PT'))
+
+        import freqopttest.tst as tst
         super(MMDTest, self).__init__(p, alpha)
         self.p = p
         self.k = k
@@ -974,6 +974,7 @@ class MMDTest(CGofTest):
         
         Return a test statistic
         """
+        import freqopttest.data as fdata
         seed = self.seed
         ds_p = self.ds_p
         mmdtest = self.mmdtest
@@ -988,6 +989,7 @@ class MMDTest(CGofTest):
         return stat
 
     def perform_test(self, X, Y):
+        import freqopttest.data as fdata
         ds_p = self.ds_p
         mmdtest = self.mmdtest
         seed = self.seed
@@ -1021,6 +1023,7 @@ class MMDSplitTest(CGofTest):
     def __init__(self, p, k, l, n_permute=400, alpha=0.01, seed=101):
         # logging.warning(('This test does not accept Pytorch '
         #                  'kernels starting with prefix PT'))
+        import freqopttest.tst as tst
         super(MMDSplitTest, self).__init__(p, alpha)
 
         self.p = p
@@ -1057,6 +1060,8 @@ class MMDSplitTest(CGofTest):
         
         Return a test statistic
         """
+
+        import freqopttest.data as fdata
         seed = self.seed
         ds_p = self.ds_p
         mmdtest = self.mmdtest
@@ -1073,6 +1078,8 @@ class MMDSplitTest(CGofTest):
         return stat
 
     def perform_test(self, X, Y):
+
+        import freqopttest.data as fdata
         ds_p = self.ds_p
         mmdtest = self.mmdtest
         seed = self.seed
